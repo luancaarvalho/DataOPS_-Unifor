@@ -1,0 +1,55 @@
+# Makefile para gerenciamento com UV
+# Execute: make -f Makefile.uv <target>
+
+PROJECT_DIR = my_uv_project
+PYTHON_VERSION = 3.9
+
+.PHONY: help install-uv init add-deps sync run-example clean info
+
+help: ## Mostra esta mensagem de ajuda
+	@echo "Targets disponíveis para UV:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+install-uv: ## Instala o UV (use apenas se não estiver instalado)
+	@echo "Instalando UV..."
+	curl -LsSf https://astral.sh/uv/install.sh | sh
+	@echo "✓ UV instalado"
+	@echo "⚠️  Reinicie o terminal ou execute: source ~/.zshrc"
+
+init: ## Inicializa um novo projeto UV
+	@echo "Inicializando projeto UV em $(PROJECT_DIR)..."
+	mkdir -p $(PROJECT_DIR)
+	cd $(PROJECT_DIR) && uv init
+	@echo "✓ Projeto inicializado em $(PROJECT_DIR)/"
+
+add-deps: ## Adiciona dependências ao projeto
+	@echo "Adicionando dependências..."
+	cd $(PROJECT_DIR) && uv add pandas
+	cd $(PROJECT_DIR) && uv add requests
+	@echo "✓ Dependências adicionadas ao pyproject.toml"
+
+sync: ## Sincroniza/instala as dependências do projeto
+	@echo "Sincronizando dependências..."
+	cd $(PROJECT_DIR) && uv sync
+	@echo "✓ Dependências sincronizadas"
+
+run-example: ## Executa um exemplo no ambiente UV
+	@echo "Executando exemplo..."
+	cd $(PROJECT_DIR) && uv run python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
+	cd $(PROJECT_DIR) && uv run python -c "import requests; print(f'Requests version: {requests.__version__}')"
+
+info: ## Mostra informações do ambiente UV
+	@echo "Dependências instaladas:"
+	cd $(PROJECT_DIR) && uv pip list
+
+tree: ## Mostra árvore de dependências
+	@echo "Árvore de dependências:"
+	cd $(PROJECT_DIR) && uv tree
+
+clean: ## Remove o diretório do projeto
+	@echo "Removendo projeto $(PROJECT_DIR)..."
+	rm -rf $(PROJECT_DIR)
+	@echo "✓ Projeto removido"
+
+# Workflow completo
+all: init add-deps sync run-example ## Executa o workflow completo (init -> add-deps -> sync -> run-example)

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+
+# Airflow
+aula_01/airflow/logs/
+aula_01/airflow/config/
+*.log
+
+# CSV files
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cheatsheet (excluded as requested)
+cheatsheet.md
+GEMINI.md
+
+# Other
+*.bak
+*.tmp
