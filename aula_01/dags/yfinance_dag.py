@@ -24,7 +24,7 @@ def _fetch_yfinance_data_and_create_csv(ticker, date, **kwargs):
 
 with DAG(
     dag_id="yfinance_petrobras_dag",
-    start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
+    start_date=pendulum.datetime(2025, 9, 20, tz="UTC"),
     catchup=True,
     schedule="@daily",
     tags=["dataops", "unifor"],

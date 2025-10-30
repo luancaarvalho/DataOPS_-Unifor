@@ -32,7 +32,7 @@ def _fetch_weather_data_and_create_csv(date, **kwargs):
 with DAG(
     dag_id="weather_fortaleza_dag",
     start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
-    catchup=True,
+    catchup=False,
     schedule="@daily",
     tags=["dataops", "unifor"],
 ) as dag:

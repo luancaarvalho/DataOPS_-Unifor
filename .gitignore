@@ -32,7 +32,7 @@ aula_01/airflow/config/
 Thumbs.db
 
 # Cheatsheet (excluded as requested)
-cheatsheet.md
+aula_01/cheatsheet.md
 GEMINI.md
 
 # Other
