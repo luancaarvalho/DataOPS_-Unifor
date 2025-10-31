@@ -15,10 +15,16 @@ env/
 # Airflow
 aula_01/airflow/logs/
 aula_01/airflow/config/
+airflow/logs/scheduler/
 *.log
 
 # CSV files
 *.csv
+
+# PyAirbyte
+aula_03/pyairbyte/.venv-*
+aula_03/pyairbyte/venv/
+**/.airbyte/
 
 # IDE
 .vscode/

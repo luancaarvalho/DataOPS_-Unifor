@@ -13,6 +13,13 @@ def _fetch_yfinance_data_and_create_csv(ticker, date, **kwargs):
     """
     Fetches daily stock data for a given ticker from Yahoo Finance and saves it to a CSV file.
     """
+
+    date_str = "{{ ds }}"
+
+    print("----------------------------------------------")
+    print(date_str)
+    print("----------------------------------------------")
+
     # yfinance downloads data up to the day before the end date
     end_date = pd.to_datetime(date) + pd.DateOffset(days=1)
     data = yf.download(ticker, start=date, end=end_date.strftime('%Y-%m-%d'))
@@ -30,10 +37,16 @@ with DAG(
     tags=["dataops", "unifor"],
     params={
         "ticker": "PETR4.SA",
-    }
+    },
+    max_active_runs=1,
 ) as dag:
     
     date_str = "{{ ds }}"
+
+    print("----------------------------------------------")
+    print(date_str)
+    print("----------------------------------------------")
+
 
     fetch_yfinance_data_task = PythonOperator(
         task_id="fetch_yfinance_data_and_create_csv",
