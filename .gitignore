@@ -56,3 +56,7 @@ aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
 # PostgreSQL data directories
 aula_04/labelstudio/postgres-data/
 aula_04/*/postgres-data/
+
+# Label Studio - dados do PostgreSQL
+aula_04/labelstudio/postgres-data/
+aula_04/labelstudio/mydata/
