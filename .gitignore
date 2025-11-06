@@ -44,3 +44,5 @@ GEMINI.md
 # Other
 *.bak
 *.tmp
+aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
+aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb

@@ -85,7 +85,7 @@ class GitHubToMinIOPipeline:
             count = len(list(records))
             self.metrics['extraction'][stream_name] = count
             print(f"  • {stream_name}: {count} registros")
-        
+         
         return result
     
     def save_to_bronze(self, result: ab.ReadResult) -> Dict[str, str]:

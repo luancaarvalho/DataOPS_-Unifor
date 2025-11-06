@@ -131,8 +131,7 @@ for stream_name, records in result.streams.items():
     local_path.unlink()
 
 # Limpar diretório temporário
-import shutil
-shutil.rmtree(temp_dir, ignore_errors=True)
+temp_dir.rmdir()
 
 # Resumo final
 print("\n" + "="*60)
