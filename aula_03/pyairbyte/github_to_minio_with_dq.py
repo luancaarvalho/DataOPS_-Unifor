@@ -12,6 +12,7 @@ Fluxo:
 
 import airbyte as ab
 import os
+import sys
 import boto3
 import gzip
 import json
@@ -428,9 +429,16 @@ class GitHubToMinIOPipeline:
 # Execução
 if __name__ == "__main__":
     # Configurações
-    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "your_token_here")
-    REPO = "luancaarvalho/DataOPS_-Unifor"
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+    REPO = os.getenv("GITHUB_REPO", "luancaarvalho/DataOPS_-Unifor")
     STREAMS = ["issues", "pull_requests", "stargazers", "commits"]
+    
+    # Validar credenciais
+    if not GITHUB_TOKEN:
+        print("❌ Erro: GITHUB_TOKEN não configurado!")
+        print("Configure a variável de ambiente GITHUB_TOKEN ou crie um arquivo .env")
+        print("Veja .env.example para um template")
+        sys.exit(1)
     
     print("🚀 PyAirbyte Pipeline com Data Quality")
     print(f"📦 Repositório: {REPO}")

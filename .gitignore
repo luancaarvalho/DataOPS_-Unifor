@@ -12,7 +12,13 @@ venv/
 ENV/
 env/
 
+# Environment variables
+.env
+.env.local
+*.env
+
 # Airflow
+aula_01/airflow/.env
 aula_01/airflow/logs/
 aula_01/airflow/config/
 airflow/logs/scheduler/

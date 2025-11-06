@@ -8,10 +8,18 @@ Ideal para testes rápidos e aprendizado.
 
 import airbyte as ab
 import os
+import sys
 
 # Configurações
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "your_token_here")
-REPO = "luancaarvalho/DataOPS_-Unifor"  # Repositório a ser extraído
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+REPO = os.getenv("GITHUB_REPO", "luancaarvalho/DataOPS_-Unifor")
+
+# Validar credenciais
+if not GITHUB_TOKEN:
+    print("❌ Erro: GITHUB_TOKEN não configurado!")
+    print("Configure a variável de ambiente GITHUB_TOKEN ou crie um arquivo .env")
+    print("Veja .env.example para um template")
+    sys.exit(1)
 
 print("🚀 Iniciando pipeline PyAirbyte...")
 print(f"📦 Repositório: {REPO}")

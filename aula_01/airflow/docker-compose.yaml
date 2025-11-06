@@ -72,8 +72,12 @@ x-airflow-common:
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # Git-sync configuration - descomente quando git-sync estiver ativo
+    # AIRFLOW__CORE__DAGS_FOLDER: '/git/repo/aula_01/dags'
   volumes:
     - ../dags:/opt/airflow/dags
+    # Quando git-sync estiver ativo, comente a linha acima e descomente a linha abaixo:
+    # - git-sync-dags:/git:ro
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config
     - ../plugins:/opt/airflow/plugins
@@ -284,5 +288,27 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  # Git-sync service - COMENTADO
+  # Descomente para habilitar sincronização automática de DAGs do Git
+  # Veja README_GITSYNC.md para instruções de configuração
+  # git-sync:
+  #   image: registry.k8s.io/git-sync/git-sync:v4.2.1
+  #   environment:
+  #     GITSYNC_REPO: ${GITHUB_REPO:-https://github.com/luancaarvalho/DataOPS_-Unifor.git}
+  #     GITSYNC_USERNAME: ${GITHUB_USERNAME:-oauth2}
+  #     GITSYNC_PASSWORD: ${GITHUB_TOKEN}
+  #     GITSYNC_BRANCH: ${GIT_SYNC_BRANCH:-main}
+  #     GITSYNC_ROOT: /git
+  #     GITSYNC_DEST: repo
+  #     GITSYNC_PERIOD: 10s
+  #     GITSYNC_ONE_TIME: "false"
+  #     GITSYNC_ADD_USER: "true"
+  #     GITSYNC_SUBMODULES: "off"
+  #     GITSYNC_LINK: repo
+  #   volumes:
+  #     - git-sync-dags:/git
+  #   restart: always
+
 volumes:
   postgres-db-volume:
+  git-sync-dags:
