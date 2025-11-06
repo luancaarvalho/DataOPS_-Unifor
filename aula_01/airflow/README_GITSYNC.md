@@ -183,3 +183,4 @@ Para desativar e voltar ao modo local:
 4. Descomente o volume `- ../dags:/opt/airflow/dags`
 5. Reinicie os containers: `docker-compose restart`
 
+
