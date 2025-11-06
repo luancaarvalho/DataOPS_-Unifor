@@ -112,8 +112,8 @@ services:
     image: marquezproject/marquez:latest
     container_name: marquez
     ports:
-      - "5000:5000"
-      - "5001:5001"
+      - "5002:5000"
+      - "5003:5001"
     environment:
       MARQUEZ_CONFIG: /usr/src/app/marquez.yml
     volumes:
