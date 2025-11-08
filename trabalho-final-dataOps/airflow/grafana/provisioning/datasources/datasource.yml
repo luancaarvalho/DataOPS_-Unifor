@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    orgId: 1
+    uid: covid_postgres
+    url: postgres:5432
+    user: airflow
+    secureJsonData:
+      password: airflow
+    jsonData:
+      database: airflow
+      sslmode: "disable"
+      timeColumn: date
+      timeInterval: "1d"
+    isDefault: true
+    editable: false
