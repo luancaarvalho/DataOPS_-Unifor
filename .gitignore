@@ -60,3 +60,17 @@ aula_04/*/postgres-data/
 # Label Studio - dados do PostgreSQL
 aula_04/labelstudio/postgres-data/
 aula_04/labelstudio/mydata/
+# Ignorar logs do Airflow
+airflow/logs/
+TrabalhoAndre/airflow/logs/
+
+# Ignorar configurações locais do Airflow
+airflow/unittests.cfg
+airflow.cfg
+webserver_config.py
+
+# Ignorar dados temporários
+*.pyc
+__pycache__/
+*.db
+.env
