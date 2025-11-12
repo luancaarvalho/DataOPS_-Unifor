@@ -6,8 +6,6 @@ from pathlib import Path
 import boto3
 from sqlalchemy import create_engine
 from datetime import datetime
-# import great_expectations as ge
-import json
 import logging
 
 # Caminhos de dados
@@ -90,25 +88,6 @@ def fluxo_netflix():
         logger.info("✅ Tratamento finalizado — %d registros", len(df))
         return df.to_json(orient="records")
 
-    # @task()
-    # 
-    # def validar_dados_com_ge(json_data):
-    #     """Validação simples de qualidade com Great Expectations"""
-
-    #     df = pd.read_json(json_data, orient="records")
-    #     gdf = ge.from_pandas(df)
-
-    #     gdf.expect_column_values_to_not_be_null("titulo")
-    #     gdf.expect_column_values_to_be_of_type("ano_lancamento", "int64")
-
-    #     results = gdf.validate()
-
-    #     if not results["success"]:
-    #         raise ValueError("Falha na validação de dados com Great Expectations")
-
-    #     return json_data 
-
-    
     @task()
     def anotar_dados(json_data):
         logger.info("Criando anotacoes nos dados")
@@ -139,6 +118,43 @@ def fluxo_netflix():
         df.to_parquet(out_path, index=False)
         logger.info("📂 Salvando arquivos parquet em %s", PROCESSED_DIR)
         return {"path": out_path, "linhas": len(df)}
+    
+    
+    @task()
+    def validar_dados(info):
+        logger.info("Valida o arquivo Parquet tratado antes de enviar para o MinIO e o Postgres.")
+
+        path = info["path"]
+        if not os.path.exists(path):
+            logger.error("Arquivo não encontrado")
+            raise FileNotFoundError(f"❌ Arquivo tratado não encontrado: {path}")
+
+        df = pd.read_parquet(path)
+        erros = []
+
+        # ======================= Validações =======================
+        if df["titulo"].isnull().any():
+            erros.append("Existem valores nulos na coluna 'titulo'.")
+
+        if df["ano_lancamento"].isnull().any() or (df["ano_lancamento"] < 1900).any():
+            erros.append("Anos de lançamento inválidos (<1900 ou nulos).")
+
+        if df["id"].duplicated().any():
+            erros.append("Existem IDs duplicados na coluna 'id'.")
+
+        if "tipo" in df.columns and not df["tipo"].isin(["Movie", "TV Show"]).all():
+            erros.append("Valores inválidos na coluna 'tipo'.")
+
+        # ======================= Resultado =======================
+        if erros:
+            logger.error("❌ Falhas encontradas na validação de dados:")
+            for erro in erros:
+                print(f" - {erro}")
+            raise ValueError("Falha nas validações de qualidade dos dados.")
+        else:
+            logger.info("✅ Todas as verificações de qualidade passaram!")
+            return {"path": path, "status": "OK", "linhas": len(df)}
+
 
     # ====================== LOADS ======================
     
@@ -147,7 +163,7 @@ def fluxo_netflix():
         logger.info("Envia o arquivo parquet tratado para o MinIO")
         s3 = boto3.client(
             "s3",
-            endpoint_url="http://minio:9000",  # nome do serviço no docker-compose  
+            endpoint_url="http://minio:9000",  
             aws_access_key_id=os.getenv("MINIO_ROOT_USER"),
             aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD"),
         )
@@ -183,39 +199,65 @@ def fluxo_netflix():
     
     #===================== RELATORIO =================
     
-    @task(task_id="gerar_relatorio")
+    @task()
     def gerar_relatorio(**context):
-        logger.info("📋 Gerando relatório de execução...")
+        logger.info("📋 Gerando relatório de execução final...")
 
-        task_instances = context["ti"].get_dagrun().get_task_instances()
+        # Pega todas as tasks que rodaram neste DAG Run
+        dag_run = context["ti"].get_dagrun()
+        task_instances = dag_run.get_task_instances()
+
         relatorio = []
-
         for ti in task_instances:
             if ti.task_id != "gerar_relatorio":  # evita incluir ela mesma
                 relatorio.append({
                     "task": ti.task_id,
                     "inicio": ti.start_date,
                     "fim": ti.end_date,
-                    "duracao_s": ti.duration,  # usa o tempo oficial do Airflow
+                    "duracao_s": ti.duration,
                     "estado": ti.state
                 })
 
         df = pd.DataFrame(relatorio)
-        logger.info("\n%s", df.to_string(index=False))
-        return "Relatório final gerado com sucesso!"
+        os.makedirs(f"{PROCESSED_DIR}/relatorios", exist_ok=True)
+
+        # Caminho local e nome do arquivo
+        relatorio_path = os.path.join(PROCESSED_DIR, "relatorios", "relatorio_execucao.csv")
+        df.to_csv(relatorio_path, index=False)
+        logger.info("✅ Relatório salvo em: %s", relatorio_path)
+
+        # --- Enviar para o MinIO ---
+        s3 = boto3.client(
+            "s3",
+            endpoint_url="http://minio:9000",
+            aws_access_key_id=os.getenv("MINIO_ROOT_USER"),
+            aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD"),
+        )
+
+        bucket = "airflow-data"
+        try:
+            s3.head_bucket(Bucket=bucket)
+        except Exception:
+            s3.create_bucket(Bucket=bucket)
+
+        s3.upload_file(relatorio_path, bucket, "relatorios/relatorio_execucao.csv")
+        logger.info("📤 Relatório enviado ao MinIO em: s3://%s/relatorios/relatorio_execucao.csv", bucket)
+
+        return f"s3://{bucket}/relatorios/relatorio_execucao.csv"
+
 
 
     # ====================== DEPENDÊNCIAS ======================
 
     caminhos = listar_csvs()
     json = carregar_e_tratar(caminhos)
-    # json_validado = validar_dados_com_ge(json)
     anotado = anotar_dados(json)
     resultado = salvar_parquet(anotado)
-    enviar_para_minio(resultado)
-    carregar_no_postgres(resultado)
+    validado = validar_dados(resultado)   
+    enviar_para_minio(validado)
+    carregar_no_postgres(validado)
 
-    gerar_relatorio()
+    [caminhos, json, anotado, resultado, validado] >> gerar_relatorio()
 
 
 
