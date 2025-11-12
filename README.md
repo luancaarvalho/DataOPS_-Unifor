@@ -78,8 +78,13 @@ dataOps-Unifor/
 
 <h3>1) Clone o repositório</h3>
 
-<pre><code>git clone https://github.com/dantedod/DataOPS_-Unifor/tree/trab-dante-rafael
-cd DataOPS_-Unifor/trabalho-final-dataOps/airflow
+<pre><code>git clone https://github.com/dantedod/DataOPS_-Unifor/
+</code></pre>
+
+<pre><code>git checkout -b trab-dante-rafael
+</code></pre>
+
+<pre><code>cd DataOPS_-Unifor/trabalho-final-dataOps/airflow
 </code></pre>
 
 <h3>2) Suba os containers</h3>
