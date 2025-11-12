@@ -151,6 +151,7 @@ Isso iniciará os containers:
 
 ---
 
+## 🧹 Parar e Limpar o Ambiente
 ```bash
 make down
 ``` 
