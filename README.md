@@ -82,7 +82,9 @@ dataOps-Unifor/
 </code></pre>
 
 <pre><code>cd DataOPS_-Unifor
-code .
+</code></pre>
+
+<pre><code>code .
 </code></pre>
 
 <pre><code>git checkout -b trab-dante-rafael
