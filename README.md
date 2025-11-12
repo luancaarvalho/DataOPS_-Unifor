@@ -78,7 +78,7 @@ dataOps-Unifor/
 
 <h3>1) Clone o repositório</h3>
 
-<pre><code>git clone &lt;seu-fork-ou-repo&gt;
+<pre><code>git clone https://github.com/dantedod/DataOPS_-Unifor/tree/trab-dante-rafael
 cd DataOPS_-Unifor/trabalho-final-dataOps/airflow
 </code></pre>
 
