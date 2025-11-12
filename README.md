@@ -84,10 +84,10 @@ dataOps-Unifor/
 <pre><code>cd DataOPS_-Unifor
 </code></pre>
 
-<pre><code>code .
+<pre><code>git fetch --all
 </code></pre>
 
-<pre><code>git checkout -b trab-dante-rafael
+<pre><code>git checkout trab-dante-rafael
 </code></pre>
 
 <pre><code>cd trabalho-final-dataOps/airflow
