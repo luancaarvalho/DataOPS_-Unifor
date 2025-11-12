@@ -145,11 +145,23 @@ cd DataOPS_-Unifor/trabalho-final-dataOps/airflow
 
 <h2>Dashboard (Grafana)</h2>
 
-<ul>
-  <li>Datasource provisionado em <code>grafana/provisioning/datasources.yml</code> (uid: <code>covid_postgres</code>).</li>
-  <li>Dashboard salvo em <code>grafana/dashboards/covid_dashboard.json</code> e carregado por <code>grafana/provisioning/dashboards/covid-dashboard.yml</code>.</li>
-  <li>Painel principal: <b>Evolução de Casos Confirmados por Cidade</b> (série temporal com linhas, interpolação suave e legenda tabular).</li>
+<ul> 
+  <li>Datasource provisionado em <code>grafana/provisioning/datasources.yml</code> (uid: <code>covid_postgres</code>).</li> <li>Dashboards provisionados automaticamente ao iniciar o container Grafana:</li> <ul> <li><b>1️⃣ Monitoramento COVID Ceará</b> — dashboard de negócio, com a evolução de casos confirmados por cidade, média móvel de 7 dias e dados históricos carregados do PostgreSQL (<code>covid_cases</code>).</li> <li><b>2️⃣ Visão Técnica: Monitoramento do Pipeline (DataOps)</b> — dashboard de observabilidade técnica da DAG do Airflow (<code>covid_pipeline_dag</code>), contendo: <ul> <li>Status das DAG Runs (últimas 24h e todo o período);</li> <li>Taxa de sucesso/falhas das execuções;</li> <li>Latência média (tempo de execução);</li> <li>Listagem de tarefas bem-sucedidas e falhadas.</li> </ul> </li> </ul> <li>Ambos os dashboards estão disponíveis automaticamente em <b>Dashboards → COVID Dashboards</b> no Grafana.</li> 
 </ul>
+
+<h3>(Opcional) Testar falha da DAG</h3>
+
+<p>Se quiser simular um cenário de falha no pipeline (para validar o monitoramento técnico no Grafana), basta editar o arquivo:</p>
+airflow/include/ingestion.py
+
+<p>E alterar a variável da URL da API para um endereço inválido, por exemplo:</p>
+url original (correta)
+url = "https://brasil.io/covid19/cities/cases/"
+
+url propositalmente incorreta (para gerar erro)
+url = "https://brasil.io/api/inexistente/"
+
+<p>Depois disso:</p> <ol> <li>Execute novamente a DAG <code>covid_pipeline_dag</code> no Airflow (Trigger DAG).</li> <li>A task <code>ingest_data</code> falhará, e o painel <b>“Tarefas Falhadas (Últimas 24h)”</b> do Grafana refletirá automaticamente o erro.</li> </ol> <p>Assim, o avaliador pode visualizar o comportamento real de observabilidade e falha do pipeline em tempo real.</p>
 
 <hr/>
 
@@ -201,4 +213,9 @@ cd DataOPS_-Unifor/trabalho-final-dataOps/airflow
 <hr/>
 
 <h2>Licença</h2>
-<p>Projeto acadêmico — uso educacional.</p>
+<p>
+  Projeto acadêmico — uso educacional.<br><br>
+  Desenvolvido por:<br>
+  👉 <a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a><br>
+  👉 <a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a>
+</p> 
