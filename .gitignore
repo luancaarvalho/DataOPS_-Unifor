@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,51 +11,59 @@ venv/
 ENV/
 env/
 
-# Environment variables
 .env
 .env.local
 *.env
 
-# Airflow
 aula_01/airflow/.env
 aula_01/airflow/logs/
 aula_01/airflow/config/
+airflow/logs/
 airflow/logs/scheduler/
 *.log
 
-# CSV files
 *.csv
 
-# PyAirbyte
 aula_03/pyairbyte/.venv-*
 aula_03/pyairbyte/venv/
 **/.airbyte/
 
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
 .DS_Store
 Thumbs.db
 
-# Cheatsheet (excluded as requested)
 aula_01/cheatsheet.md
 GEMINI.md
 
-# Other
 *.bak
 *.tmp
 aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
 aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
 
-# PostgreSQL data directories
 aula_04/labelstudio/postgres-data/
 aula_04/*/postgres-data/
-
-# Label Studio - dados do PostgreSQL
-aula_04/labelstudio/postgres-data/
 aula_04/labelstudio/mydata/
+
+airflow/postgres-db-volume/
+postgres-data/
+pg_data/
+pgdata/
+docker/postgres/
+docker/postgres-data/
+**/postgres-data/
+**/pg_data/
+
+grafana-storage/
+
+
+
+data/
+data/raw/
+data/processed/
+data/postgres/
+data/**/*.csv

@@ -1,0 +1,168 @@
+{
+  "uid": "dash-monitoramento-tecnico-dataops",
+  "title": "Visão Técnica: Monitoramento do Pipeline (DataOps)",
+  "timezone": "browser",
+  "style": "dark",
+  "refresh": "1m",
+  "schemaVersion": 36,
+  "version": 3,
+  "panels": [
+    {
+      "title": "Status das DAG Runs (Últimas 24h)",
+      "type": "piechart",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT state, COUNT(state) AS total FROM dag_run WHERE dag_id = 'covid_pipeline_dag' AND execution_date >= NOW() - INTERVAL '24 hours' GROUP BY state ORDER BY state;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "options": {
+        "displayLabels": ["name", "value"],
+        "pieType": "donut",
+        "legend": { "displayMode": "list" }
+      }
+    },
+    {
+      "title": "Taxa de Sucesso (Últimas 24h)",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT ROUND(100.0 * SUM(CASE WHEN state = 'success' THEN 1 ELSE 0 END) / COUNT(*), 2) AS taxa_sucesso FROM dag_run WHERE dag_id = 'covid_pipeline_dag' AND execution_date >= NOW() - INTERVAL '24 hours';",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 50 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }
+    },
+    {
+      "title": "Latência da DAG (Tempo de Execução)",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT execution_date AS time, EXTRACT(EPOCH FROM (end_date - start_date)) AS latencia_segundos FROM dag_run WHERE dag_id = 'covid_pipeline_dag' AND state = 'success' AND $__timeFilter(execution_date) ORDER BY 1;",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Tarefas Falhadas (Últimas 24h)",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT task_id, state, start_date, end_date, duration FROM task_instance WHERE dag_id = 'covid_pipeline_dag' AND state = 'failed' AND start_date >= NOW() - INTERVAL '24 hours' ORDER BY start_date DESC;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "title": "Tarefas Bem-Sucedidas (Últimas 24h)",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT task_id, state, start_date, end_date, duration FROM task_instance WHERE dag_id = 'covid_pipeline_dag' AND state = 'success' AND start_date >= NOW() - INTERVAL '24 hours' ORDER BY start_date DESC;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    },
+
+    {
+      "title": "Status das DAG Runs (Todo o Período)",
+      "type": "piechart",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT state, COUNT(state) AS total FROM dag_run WHERE dag_id = 'covid_pipeline_dag' GROUP BY state ORDER BY state;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "options": {
+        "displayLabels": ["name", "value"],
+        "pieType": "donut",
+        "legend": { "displayMode": "list" }
+      }
+    },
+    {
+      "title": "Taxa de Sucesso (Todo o Período)",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT ROUND(100.0 * SUM(CASE WHEN state = 'success' THEN 1 ELSE 0 END) / COUNT(*), 2) AS taxa_sucesso FROM dag_run WHERE dag_id = 'covid_pipeline_dag';",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 50 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 }
+    },
+    {
+      "title": "Tarefas Falhadas (Todo o Período)",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT task_id, state, start_date, end_date, duration FROM task_instance WHERE dag_id = 'covid_pipeline_dag' AND state = 'failed' ORDER BY start_date DESC;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 }
+    },
+    {
+      "title": "Tarefas Bem-Sucedidas (Todo o Período)",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "covid_postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT task_id, state, start_date, end_date, duration FROM task_instance WHERE dag_id = 'covid_pipeline_dag' AND state = 'success' ORDER BY start_date DESC;",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 }
+    }
+  ]
+}
