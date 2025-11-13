@@ -12,9 +12,7 @@ from ingestion import fetch_covid_data
 from transform import transform_data
 from load_postgres import load_to_postgres
 
-
 class LocalFileSensor(BaseSensorOperator):
-
     template_fields = ("filepath",)
 
     def __init__(self, filepath: str, **kwargs):
@@ -23,15 +21,22 @@ class LocalFileSensor(BaseSensorOperator):
 
     def poke(self, context):
         exists = os.path.exists(self.filepath)
+
+        if not exists and context["ti"].try_number == 1:
+            self.log.info(
+                f"Primeira execução detectada. Arquivo ainda não existe, "
+                f"mas seguiremos para criar via ingest_data()."
+            )
+            return True
+
         if exists:
             self.log.info(f"Arquivo encontrado: {self.filepath}")
         else:
             self.log.info(f"Aguardando arquivo: {self.filepath}")
+
         return exists
 
-
 RAW_DATASET = Dataset("/opt/airflow/data/raw/covid_data.csv")
-
 
 @dag(
     dag_id="covid_pipeline_dag",
@@ -75,6 +80,5 @@ def covid_pipeline():
         >> transform_and_load()
         >> notify_grafana()
     )
-
 
 covid_pipeline()
