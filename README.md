@@ -227,6 +227,6 @@ url = "https://brasil.io/api/inexistente/"
 <p>
   Projeto acadêmico — uso educacional.<br><br>
   Desenvolvido por:<br>
-  👉 <a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a><br>
-  👉 <a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a>
+  👉 <a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a><br> - 2518583
+  👉 <a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a> - 2517595
 </p> 
