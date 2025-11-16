@@ -1,5 +1,7 @@
 # Trabalho Dataops
 
+Trabalho do aluno Vitor Braga Estevam de matrícula *2518612* para a disciplina de *dataops*.
+
 ## Sobre
 
 O trabalho foi feito utilizando airflow para orquestração, duckbd para armazenamento e superset para visualização. 
