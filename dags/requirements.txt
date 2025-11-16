@@ -1,0 +1,8 @@
+apache-airflow
+boto3
+pandas
+SQLAlchemy
+PyMySQL
+requests
+mysql-connector-python
+python-dotenv
