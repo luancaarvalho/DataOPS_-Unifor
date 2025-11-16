@@ -1,5 +1,5 @@
-### Projeto desemvolvido por:
-## Nome / Matricula
+## Projeto desemvolvido por:
+### Nome / Matricula
 * Marcos Aurelio Mendes Oliveira - 2519887
 * Evellen Thais Gomes Silva - 2518889
 
@@ -35,8 +35,8 @@ Na raiz do projeto, execute o seguinte comando para construir e iniciar todos os
 ```bash
 docker-compose up -d
 ```
-
 Aguarde alguns minutos para que todos os serviços, especialmente o Airflow, sejam iniciados completamente.
+(Caso as pasta logs, plugins e config, crie elas)
 
 ### 1.2. Configurar o MinIO (Data Lake)
 
