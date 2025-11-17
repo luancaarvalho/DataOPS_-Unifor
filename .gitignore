@@ -21,6 +21,8 @@ env/
 aula_01/airflow/.env
 aula_01/airflow/logs/
 aula_01/airflow/config/
+trabalho_final/config/
+trabalho_final/.env
 airflow/logs/scheduler/
 *.log
 
