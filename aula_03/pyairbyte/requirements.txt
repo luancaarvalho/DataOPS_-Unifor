@@ -1,0 +1,9 @@
+# PyAirbyte e dependências
+airbyte==0.17.0
+
+# Conectores específicos
+# Nota: PyAirbyte baixa automaticamente os conectores quando necessário
+# mas você pode instalá-los manualmente se preferir
+
+# Utilitários
+python-dotenv==1.0.0

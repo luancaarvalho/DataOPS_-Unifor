@@ -1,0 +1,50 @@
+# Makefile para gerenciamento com Pixi
+# Execute: make -f Makefile.pixi <target>
+
+PROJECT_DIR = my_pixi_project
+
+.PHONY: help install-pixi init add-deps install run-example clean info
+
+help: ## Mostra esta mensagem de ajuda
+	@echo "Targets disponíveis para Pixi:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+install-pixi: ## Instala o Pixi (use apenas se não estiver instalado)
+	@echo "Instalando Pixi..."
+	curl -fsSL https://pixi.sh/install.sh | bash
+	@echo "⚠️  Reinicie o terminal ou execute: source ~/.bashrc (ou ~/.zshrc)"
+
+init: ## Inicializa um novo projeto Pixi
+	@echo "Inicializando projeto Pixi em $(PROJECT_DIR)..."
+	@mkdir -p $(PROJECT_DIR)
+	pixi init $(PROJECT_DIR)
+	@echo "✓ Projeto inicializado em $(PROJECT_DIR)/"
+
+add-deps: ## Adiciona dependências ao projeto
+	@echo "Adicionando dependências..."
+	pixi add python=3.9 --manifest-path $(PROJECT_DIR)/pixi.toml
+	pixi add pandas --manifest-path $(PROJECT_DIR)/pixi.toml
+	pixi add requests --pypi --manifest-path $(PROJECT_DIR)/pixi.toml
+	@echo "✓ Dependências adicionadas"
+
+install: ## Instala as dependências do projeto
+	@echo "Instalando dependências..."
+	pixi install --manifest-path $(PROJECT_DIR)/pixi.toml
+	@echo "✓ Dependências instaladas"
+
+run-example: ## Executa um exemplo simples no ambiente Pixi
+	@echo "Executando exemplo..."
+	cd $(PROJECT_DIR) && pixi run python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
+	cd $(PROJECT_DIR) && pixi run python -c "import requests; print(f'Requests version: {requests.__version__}')"
+
+info: ## Mostra informações do projeto Pixi
+	@echo "Informações do projeto:"
+	pixi info --manifest-path $(PROJECT_DIR)/pixi.toml
+
+clean: ## Remove o diretório do projeto
+	@echo "Removendo projeto $(PROJECT_DIR)..."
+	rm -rf $(PROJECT_DIR)
+	@echo "✓ Projeto removido"
+
+# Workflow completo
+all: init add-deps install run-example ## Executa o workflow completo (init -> add-deps -> install -> run-example)
