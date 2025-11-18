@@ -1,0 +1,378 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_password@airflow-postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+    # MinIO - usa valores padrão se .env não existir
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-dataops_admin}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-DataOps2025!SecurePassword}
+    # Label Studio - usa valores padrão se .env não existir
+    LABELSTUDIO_URL: http://label-studio:8080
+    LABELSTUDIO_TOKEN: ${LABELSTUDIO_TOKEN:-SUBSTITUIR_PELO_SEU_TOKEN_AQUI}
+    LABELSTUDIO_PROJECT: ${LABELSTUDIO_PROJECT:-4}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/config
+    - ./scripts_pipeline:/opt/airflow/scripts_pipeline
+    - ./.env:/opt/airflow/.env:ro
+  user: "${AIRFLOW_UID:-50000}:0"
+  networks:
+    - dataops-network
+
+services:
+  # Airflow Services
+  airflow-postgres:
+    image: postgres:15-alpine
+    container_name: airflow-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow_password
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    networks:
+      - dataops-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /sources/logs /sources/dags /sources/plugins /sources/config
+        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins,config}
+        exec /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    user: "0:0"
+    volumes:
+      - .:/sources
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  # Airflow Triggerer - Necessário para sensores deferrable
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+
+  # MinIO Service
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-dataops_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-DataOps2025!SecurePassword}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - dataops-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # MinIO Initialization Service - Cria buckets bronze, silver e gold
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    entrypoint: /bin/bash
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-dataops_admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-DataOps2025!SecurePassword}
+    command:
+      - -c
+      - |
+        echo "Aguardando MinIO ficar disponível..."
+        for i in {1..30}; do
+          if curl -sf http://minio:9000/minio/health/live > /dev/null 2>&1; then
+            echo "MinIO disponível!"
+            break
+          fi
+          echo "Tentativa $i/30 - aguardando MinIO..."
+          sleep 2
+        done
+        echo "Configurando MinIO client..."
+        /usr/bin/mc alias set minio http://minio:9000 $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+        echo "Criando buckets..."
+        /usr/bin/mc mb --ignore-existing minio/inbox && echo "inbox (event-driven)"
+        /usr/bin/mc mb --ignore-existing minio/bronze && echo "bronze"
+        /usr/bin/mc mb --ignore-existing minio/silver && echo "silver"
+        /usr/bin/mc mb --ignore-existing minio/gold && echo "gold"
+        echo "Inicialização do MinIO concluída!"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - dataops-network
+
+  # Label Studio PostgreSQL
+  label-studio-postgres:
+    image: postgres:15-alpine
+    container_name: label-studio-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: label_studio
+      POSTGRES_USER: label_studio
+      POSTGRES_PASSWORD: label_studio
+    volumes:
+      - label-studio-postgres-data:/var/lib/postgresql/data
+    networks:
+      - dataops-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U label_studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Label Studio Service
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    restart: always
+    ports:
+      - "8001:8080"
+    environment:
+      # PostgreSQL Database Configuration
+      DJANGO_DB: default
+      POSTGRE_NAME: label_studio
+      POSTGRE_USER: label_studio
+      POSTGRE_PASSWORD: label_studio
+      POSTGRE_HOST: label-studio-postgres
+      POSTGRE_PORT: 5432
+      # Other configurations
+      LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED: "true"
+      LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK: "false"
+      LOG_LEVEL: INFO
+    volumes:
+      - label-studio-data:/label-studio/data
+    depends_on:
+      label-studio-postgres:
+        condition: service_healthy
+    networks:
+      - dataops-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # Label Studio Initialization Service - Cria usuário admin
+  label-studio-init:
+    image: postgres:15-alpine
+    container_name: label-studio-init
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "Aguardando Label Studio inicializar..."
+        sleep 10
+
+        echo "Criando usuário admin..."
+
+        PGPASSWORD=label_studio psql -h label-studio-postgres -U label_studio -d label_studio << 'EOF'
+        -- Verificar se usuário já existe
+        DO $$$$
+        DECLARE
+          user_count INTEGER;
+        BEGIN
+          SELECT COUNT(*) INTO user_count FROM htx_user WHERE email = 'admin@localhost.com';
+
+          IF user_count = 0 THEN
+            -- Inserir usuário admin com senha '123456'
+            -- Hash gerado com Django: pbkdf2_sha256$$600000$$salt$$hash
+            INSERT INTO htx_user (
+              password,
+              email,
+              username,
+              first_name,
+              last_name,
+              is_active,
+              is_staff,
+              is_superuser,
+              date_joined,
+              last_activity,
+              activity_at,
+              phone,
+              avatar,
+              allow_newsletters
+            ) VALUES (
+              'pbkdf2_sha256$$600000$$Z2yNESIEQAihNOZcC4EQAg$$7gOA7KqEbvTCzQoFIR9Tkw7cvMFyBCcws5bgVX4IgvE',
+              'admin@localhost.com',
+              'admin',
+              'Admin',
+              'User',
+              true,
+              true,
+              true,
+              NOW(),
+              NOW(),
+              NOW(),
+              '',
+              '',
+              false
+            );
+            RAISE NOTICE 'Usuário admin criado com sucesso!';
+          ELSE
+            RAISE NOTICE 'Usuário admin já existe';
+          END IF;
+        END$$$$;
+        EOF
+
+        echo ""
+        echo "  Label Studio configurado!"
+        echo "   URL: http://localhost:8001"
+        echo "   Email: admin@localhost.com"
+        echo "   Senha: 123456"
+        echo ""
+    depends_on:
+      label-studio:
+        condition: service_healthy
+    networks:
+      - dataops-network
+
+  # Streamlit Dashboard
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: streamlit-dashboard
+    restart: always
+    entrypoint: /bin/bash
+    ports:
+      - "8501:8501"
+    environment:
+      STREAMLIT_SERVER_PORT: 8501
+      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      STREAMLIT_CLIENT_LOGGER_LEVEL: info
+      # MinIO Configuration - conectar via hostname na mesma rede
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-dataops_admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-DataOps2025!SecurePassword}
+      # Label Studio Configuration - conectar via hostname na mesma rede
+      LABELSTUDIO_URL: http://label-studio:8080
+      LABELSTUDIO_TOKEN: ${LABELSTUDIO_TOKEN:-SUBSTITUIR_PELO_SEU_TOKEN_AQUI}
+      LABELSTUDIO_PROJECT: ${LABELSTUDIO_PROJECT:-4}
+    volumes:
+      - ./streamlit:/app/streamlit
+      - ./scripts_pipeline:/app/scripts_pipeline
+      - ./wait_for_minio.py:/app/wait_for_minio.py:ro
+      - ./.env:/app/.env:ro
+    working_dir: /app
+    command:
+      - -c
+      - |
+        python wait_for_minio.py && streamlit run streamlit/dashboard.py --server.address 0.0.0.0 --server.port 8501
+    depends_on:
+      minio:
+        condition: service_healthy
+      label-studio:
+        condition: service_healthy
+    networks:
+      - dataops-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+
+volumes:
+  airflow-db-data:
+    driver: local
+  minio-data:
+    driver: local
+  label-studio-data:
+    driver: local
+  label-studio-postgres-data:
+    driver: local
+
+networks:
+  dataops-network:
+    driver: bridge

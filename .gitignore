@@ -1,36 +1,41 @@
+# Airflow
+logs/
+*.log
+*.pid
+airflow.db
+airflow.cfg
+unittests.cfg
+webserver_config.py
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-.venv/
+env/
 venv/
 ENV/
-env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Environment variables
+# Environment
 .env
 .env.local
-*.env
-
-# Airflow
-aula_01/airflow/.env
-aula_01/airflow/logs/
-aula_01/airflow/config/
-airflow/logs/scheduler/
-*.log
-
-# CSV files
-*.csv
-
-# PyAirbyte
-aula_03/pyairbyte/.venv-*
-aula_03/pyairbyte/venv/
-**/.airbyte/
+.env.*.local
 
 # IDE
 .vscode/
@@ -43,20 +48,8 @@ aula_03/pyairbyte/venv/
 .DS_Store
 Thumbs.db
 
-# Cheatsheet (excluded as requested)
-aula_01/cheatsheet.md
-GEMINI.md
+# Docker
+.docker/
 
-# Other
-*.bak
-*.tmp
-aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
-aula_03/pyairbyte/.cache/default_cache/default_cache.duckdb
-
-# PostgreSQL data directories
-aula_04/labelstudio/postgres-data/
-aula_04/*/postgres-data/
-
-# Label Studio - dados do PostgreSQL
-aula_04/labelstudio/postgres-data/
-aula_04/labelstudio/mydata/
+# Claude Code
+.claude/

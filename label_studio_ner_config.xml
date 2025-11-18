@@ -1,0 +1,37 @@
+<View>
+  <Text name="text" value="$text" granularity="sentence"/>
+  <Labels name="label" toName="text" choice="single" maxUsages="unlimited" showInline="true">
+    <!-- Informações de Clientes -->
+    <Label value="CLIENTE" background="#1f77b4" hotkey="1"/>
+
+    <!-- Informações de Produtos -->
+    <Label value="PRODUTO" background="#ff7f0e" hotkey="2"/>
+
+    <!-- Quantidades -->
+    <Label value="QUANTIDADE" background="#2ca02c" hotkey="3"/>
+
+    <!-- Canais de Venda -->
+    <Label value="CANAL" background="#d62728" hotkey="4"/>
+
+    <!-- Valores Monetários -->
+    <Label value="VALOR" background="#9467bd" hotkey="5"/>
+
+    <!-- Formas de Pagamento -->
+    <Label value="FORMA_PAGAMENTO" background="#8c564b" hotkey="6"/>
+
+    <!-- Status de Entrega -->
+    <Label value="STATUS" background="#e377c2" hotkey="7"/>
+
+    <!-- Localização/Cidades -->
+    <Label value="CIDADE" background="#7f7f7f" hotkey="8"/>
+
+    <!-- Avaliações -->
+    <Label value="AVALIACAO" background="#bcbd22" hotkey="9"/>
+
+    <!-- Datas -->
+    <Label value="DATA" background="#17becf" hotkey="0"/>
+
+    <!-- Sentimento -->
+    <Label value="SENTIMENTO" background="#ff9999" hotkey="s"/>
+  </Labels>
+</View>
