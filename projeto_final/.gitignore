@@ -1,0 +1,33 @@
+# Ambiente virtual criado com uv
+env/
+.venv/
+
+# Arquivos de configuração de ambiente
+.env
+
+# VSCode
+.vscode/
+.history/
+*.code-workspace
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Logs e arquivos temporários
+*.log
+*.tmp
+*.temp
+
+# Docker
+*.dockerignore
+docker-compose.override.yml
+
+# Outros arquivos do sistema
+.DS_Store
+Thumbs.db

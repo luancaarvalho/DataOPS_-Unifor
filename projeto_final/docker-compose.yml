@@ -1,0 +1,114 @@
+version: "3.9"
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.10.3
+  environment:
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    AIRFLOW__WEBSERVER__SECRET_KEY: "a87as6df9sda87f6f8sad67f5$ecr3t"
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
+    _PIP_ADDITIONAL_REQUIREMENTS: "boto3 pandas pyarrow minio streamlit great_expectations"
+    PYTHONPATH: "/opt/airflow/dags:/opt/airflow:/opt/airflow/core"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/include:/opt/airflow/include
+    - ./core:/opt/airflow/core
+    - ./data:/opt/airflow/data
+  user: "50000:50000"
+  depends_on:
+    - postgres
+    - redis
+
+services:
+
+  # ---------------------------------------------------------
+  # POSTGRES
+  # ---------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  redis:
+    image: redis:7-alpine
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create -u admin -p admin -r Admin -e a@a.a -f a -l a &&
+      airflow webserver
+      "
+    ports:
+      - "8080:8080"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: airflow scheduler
+
+  airflow-worker:
+    <<: *airflow-common
+    command: airflow celery worker
+
+  # ---------------------------------------------------------
+  # MINIO (PARA GOLD E ANNOTATED)
+  # ---------------------------------------------------------
+  minio:
+    image: minio/minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # ---------------------------------------------------------
+  # LABEL STUDIO
+  # ---------------------------------------------------------
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./label_studio_data:/label-studio/data
+    command: >
+      label-studio start
+         --no-browser
+         --host 0.0.0.0
+         --port 8080
+
+  # ---------------------------------------------------------
+  # STREAMLIT
+  # ---------------------------------------------------------
+  streamlit:
+    image: python:3.12-slim
+    container_name: streamlit
+    depends_on:
+      - postgres
+    working_dir: /app
+    volumes:
+      - ./streamlit:/app
+    ports:
+      - "8501:8501"
+    command: >
+      bash -c "pip install -r requirements.txt && streamlit run app.py --server.port=8501 --server.address=0.0.0.0"
+
+volumes:
+  pg_data:
+  minio_data:
