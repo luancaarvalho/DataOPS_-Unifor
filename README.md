@@ -73,7 +73,7 @@ Fluxo principal:
 │   ├── silver/
 │   └── bi/
 ├── docs/
-│   ├── arquitetura.png         # Diagrama simplificado (opcional)
+│   ├── arquitetura.png         
 │   └── descricao_dataset.md
 ├── monitoring/
 │   └── metabase/
