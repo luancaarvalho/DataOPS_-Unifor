@@ -4,16 +4,13 @@ import pandas as pd
 
 from logs.logger import Logger
 
-log = Logger("etl.transformer")
-
-
 class Loader:
     def __init__(self):
         current_dir = Path(__file__).parent
         relative_db_path = Path("../../data/financial_data.duckdb")
         path = (current_dir / relative_db_path).resolve()
 
-        log.logger.info(f"Connecting to duckDB at {path}...")
+        print(f"Connecting to duckDB at {path}...")
 
         self.conn = duckdb.connect(path)
 
@@ -40,10 +37,10 @@ class Loader:
         self.write_df("selic", df)
 
     def write_df(self, table: str, df: pd.DataFrame):
-        log.logger.info(f"Loading dataframe to duckDB: {table}...")
+        print(f"Loading dataframe to duckDB: {table}...")
         
         self.__create_schema(table, df)
 
         self.conn.execute(f"INSERT INTO {table} SELECT * FROM {self.__temp_table(table)}")
 
-        log.logger.info("Succesfully loaded data to duckDB!")
+        print("Succesfully loaded data to duckDB!")

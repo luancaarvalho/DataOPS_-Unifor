@@ -14,4 +14,4 @@ down:
 	$(COMPOSE) down
 
 reset:
-	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE) down -v --remove-orphans && rm -rf logs/dag*

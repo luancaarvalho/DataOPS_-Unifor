@@ -2,9 +2,7 @@ import pandas as pd
 from datetime import datetime
 
 from logs.logger import Logger
-from scrapper.scrapper import Scrapper
-
-log = Logger("etl.extractor")
+from src.scrapper.scrapper import Scrapper
 
 
 class Extractor:
@@ -21,6 +19,6 @@ class Extractor:
         return self.scrapper.get_selic_history()
     
     def collect_selic(self, date: str) -> pd.DataFrame:
-        log.logger.info(f"Collecting SELIC data for date: {date}")
+        print(f"Collecting SELIC data for date: {date}")
         date = datetime.strptime(date, "%Y-%m-%d").strftime("%d/%m/%Y")
         return self.scrapper.get_selic(date)

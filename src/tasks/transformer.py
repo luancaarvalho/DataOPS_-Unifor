@@ -1,7 +1,4 @@
 import pandas as pd
-from logs.logger import Logger
-
-log = Logger("etl.transformer")
 
 
 class Transformer:

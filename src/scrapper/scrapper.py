@@ -1,15 +1,11 @@
 import pandas as pd
 from datetime import datetime
 
-from scrapper.br_investing import SITEMAP_URL as BR_INVESTING_URL
-from scrapper.br_investing import get_page as br_investing_get_page, extract_news as br_investing_extract_news
+from src.scrapper.br_investing import SITEMAP_URL as BR_INVESTING_URL
+from src.scrapper.br_investing import get_page as br_investing_get_page, extract_news as br_investing_extract_news
 
-from scrapper.bcb import USD_BRL_CODE as BCB_USD_BRL_CODE, SELIC_CODE as BCB_SELIC_CODE
-from scrapper.bcb import get_data as bcb_get_data, get_date_range as bcb_get_date_range
-
-from logs.logger import Logger
-
-log = Logger("etl.scrapper")
+from src.scrapper.bcb import USD_BRL_CODE as BCB_USD_BRL_CODE, SELIC_CODE as BCB_SELIC_CODE
+from src.scrapper.bcb import get_data as bcb_get_data, get_date_range as bcb_get_date_range
 
 class Scrapper():
     def __init__(self):
@@ -25,14 +21,14 @@ class Scrapper():
             if page > 1:
                 url += f"/{page}"
 
-            log.logger.info(f"📄 Collecting page: {url}")
+            print(f"📄 Collecting page: {url}")
             soup = br_investing_get_page(url)
             if not soup:
                 raise Exception(f"Failed to get page content")
             
             items = br_investing_extract_news(soup)
             if len(items) == 0:
-                log.logger.info("Breaking loop as no news were extracted")
+                print("Breaking loop as no news were extracted")
                 break
 
             news.extend(items)
@@ -41,7 +37,7 @@ class Scrapper():
         df = pd.DataFrame(news)
         df["collected_at"] = datetime.now()
 
-        log.logger.info(f"✅ Total of news scrapped: {len(df)}")
+        print(f"✅ Total of news scrapped: {len(df)}")
 
         return df
     

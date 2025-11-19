@@ -12,8 +12,6 @@ from urllib.parse import urljoin
 
 from logs.logger import Logger
 
-log = Logger("etl.scrapper.br_investing")
-
 SITEMAP_URL = "https://br.investing.com/news/stock-market-news"
 HEADERS = {
     "User-Agent": "FintechDataBot/1.0 - Study purpose only",
@@ -81,7 +79,7 @@ def extract_news(soup):
         item = {"title": title, "lead": "", "url": url, "published_at": pub_date}
         data.append(item)
 
-        log.logger.info(f"News found: {item}")
+        print(f"News found: {item}")
     return data
 
 def extract_lead_paragraph(url):

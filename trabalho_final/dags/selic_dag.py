@@ -1,45 +1,82 @@
-from __future__ import annotations
+from airflow.decorators import dag, task # type: ignore
+from datetime import datetime
+from pathlib import Path
 
-from importlib.abc import Loader
-from logging import Logger
+import duckdb
+import requests
+import pandas as pd
 
-import pendulum
+@task
+def fetch_selic_data(date: str= ''):
+    print("Fecth SELIC data")
 
-from airflow.models.dag import DAG
-from airflow.providers.standard.operators.python import PythonOperator
+    if not date:
+        date = "{{ ds }}" 
+    
+    print(f"Collecting SELIC data for date: {date}")
+    date = datetime.strptime(date, "%Y-%m-%d").strftime("%d/%m/%Y")
 
-from trabalho_final.src.tasks.extractor import Extractor
-from trabalho_final.src.tasks.loader import Loader
+    
+    BCB_API_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs"
+    SELIC_CODE = 11
 
-log = Logger("dags.selic")
+    url = f"{BCB_API_URL}.{SELIC_CODE}/dados?formato=json&dataInicial={date}&dataFinal={date}"
 
-def _fetch_selic_data(date, **kwargs):
-    log.logger.info("Starting ETL pipeline")
+    print(f"📄 Fetching API: {url}")
 
-    extractor = Extractor()
-    loader = Loader()
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        raise Exception("Failed to get BCB data")
+    
+    print(f"Got successful response!")
 
-    df = extractor.collect_selic(date)
-    loader.load_selic_history(df)
+    return pd.DataFrame(resp.json())
 
-    log.logger.info("ETL pipeline finished successfully!")
+def duckdb_connect():
+    current_dir = Path(__file__).parent
+    relative_db_path = Path("../../data/financial_data.duckdb")
+    path = (current_dir / relative_db_path).resolve()
 
-    log.logger.info("Closing dependencies...")
-    loader.close()
+    print(f"Connecting to duckDB at {path}...")
 
-with DAG(
+    return duckdb.connect(path)
+
+@task
+def store_selic_data(df):
+    print("Store SELIC data")
+
+    table = "selic"
+    temp_table = "temp_selic"
+
+    conn = duckdb_connect()
+
+    print(f"Loading dataframe to duckDB: {table}...")
+    
+    conn.register(temp_table, df)
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {table} AS SELECT * FROM {temp_table}")
+
+    conn.execute(f"INSERT INTO {table} SELECT * FROM {temp_table}")
+
+    print("Succesfully loaded data to duckDB!")
+
+    print("Closing dependencies...")
+    conn.close()
+
+
+@dag(
     dag_id="selic_dag",
-    start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
+    start_date=datetime(2025, 1, 1),
     catchup=False,
     schedule="@daily",
     tags=["finance"],
-) as dag:
-     
-    date_str = "{{ ds }}"
+)
+def pipeline():
+    print(f"Starting ETL pipeline")
 
-    fetch_selic_data_task = PythonOperator(
-        task_id="fetch_selic_data",
-        python_callable=_fetch_selic_data,
-        op_kwargs={"date": date_str},
-    )
+    df = fetch_selic_data()
+    store_selic_data(df)
 
+    print(f"Finished!")
+
+# trigger dag
+pipeline()
