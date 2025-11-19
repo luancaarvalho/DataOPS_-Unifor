@@ -49,8 +49,8 @@ x-airflow-common:
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.0}
-  # build: .
+  #image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.0}
+  build: .
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -78,8 +78,6 @@ x-airflow-common:
     PYTHONPATH: '/opt/airflow'
   volumes:
     - ./dags:/opt/airflow/dags
-    # Quando git-sync estiver ativo, comente a linha acima e descomente a linha abaixo:
-    # - git-sync-dags:/git:ro
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config
     - ./plugins:/opt/airflow/plugins
@@ -293,29 +291,6 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-
-  # Git-sync service - COMENTADO
-  # Descomente para habilitar sincronização automática de DAGs do Git
-  # Veja README_GITSYNC.md para instruções de configuração
-  # git-sync:
-  #   image: registry.k8s.io/git-sync/git-sync:v4.2.1
-  #   environment:
-  #     GITSYNC_REPO: ${GITHUB_REPO:-https://github.com/luancaarvalho/DataOPS_-Unifor.git}
-  #     GITSYNC_USERNAME: ${GITHUB_USERNAME:-oauth2}
-  #     GITSYNC_PASSWORD: ${GITHUB_TOKEN}
-  #     GITSYNC_BRANCH: ${GIT_SYNC_BRANCH:-main}
-  #     GITSYNC_ROOT: /git
-  #     GITSYNC_DEST: repo
-  #     GITSYNC_PERIOD: 10s
-  #     GITSYNC_ONE_TIME: "false"
-  #     GITSYNC_ADD_USER: "true"
-  #     GITSYNC_SUBMODULES: "off"
-  #     GITSYNC_LINK: repo
-  #   volumes:
-  #     - git-sync-dags:/git
-  #   restart: always
-
- 
 
 volumes:
   postgres-db-volume:
