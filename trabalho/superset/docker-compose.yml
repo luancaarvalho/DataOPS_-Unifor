@@ -1,0 +1,22 @@
+services:
+ superset:
+    image: apache/superset:latest
+    container_name: superset
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset_home:/app/superset_home
+      - ../data:/app/data
+      - ./superset_config.py:/app/superset_config.py
+    environment:
+      - SUPERSET_SECRET_KEY=o-rato-roeu-a-roupa-do-rei-de-roma
+      - SUPERSET_CONFIG_PATH=/app/superset_config.py
+    command:
+      bash -c "
+        superset db upgrade &&
+        superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@admin.com ||
+        true &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088
+      "
