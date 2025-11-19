@@ -1,8 +1,9 @@
 from airflow import DAG
 from airflow.decorators import task
 from datetime import datetime, timedelta
+from include.store.metrics import log_task_metrics
 
-# Importações dos seus scripts
+# Importações dos scripts de negócio
 from include.ingestion.download_data import download_financial_data
 from include.annotate.annotate_data import annotate_financial_data
 from include.validate.validate_data import validate_data
@@ -25,22 +26,113 @@ with DAG(
 ):
 
     @task
-    def ingestao():
-        return download_financial_data()
+    def ingestao(**kwargs):
+        start_time = datetime.now()
+
+        try:
+            result = download_financial_data()
+
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="success",
+                start_time=start_time,
+            )
+
+            return result
+
+        except Exception:
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="error",
+                start_time=start_time,
+            )
+            raise
 
     @task
-    def anotacao(raw_path: str):
-        return annotate_financial_data(raw_path)
+    def anotacao(raw_path: str, **kwargs):
+        start_time = datetime.now()
+
+        try:
+            result = annotate_financial_data(raw_path)
+
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="success",
+                start_time=start_time,
+            )
+
+            return result
+
+        except Exception:
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="error",
+                start_time=start_time,
+            )
+            raise
 
     @task
-    def validacao(annotated_path: str):
-        return validate_data(annotated_path)
-    
-    @task
-    def store(annotated_path: str):
-        return store_data(annotated_path)
+    def validacao(annotated_path: str, **kwargs):
+        start_time = datetime.now()
 
-    # Fluxo da DAG
+        try:
+            result = validate_data(annotated_path)
+
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="success",
+                start_time=start_time,
+            )
+
+            return result
+
+        except Exception:
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="error",
+                start_time=start_time,
+            )
+            raise
+
+    @task
+    def store(annotated_path: str, **kwargs):
+        start_time = datetime.now()
+
+        try:
+            result = store_data(annotated_path)
+
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="success",
+                start_time=start_time,
+            )
+
+            return result
+
+        except Exception:
+            log_task_metrics(
+                dag_id=kwargs["dag"].dag_id,
+                task_id=kwargs["task"].task_id,
+                run_id=kwargs["run_id"],
+                status="error",
+                start_time=start_time,
+            )
+            raise
+
     raw = ingestao()
     annotated = anotacao(raw)
     validacao(annotated)
