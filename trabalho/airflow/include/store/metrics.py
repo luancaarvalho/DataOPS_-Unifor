@@ -42,9 +42,6 @@ def log_task_metrics(dag_id, task_id, run_id, status, start_time):
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=timezone.utc)
             
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
-
         end_time = datetime.now(timezone.utc)
         duration = (end_time - start_time).total_seconds()
 

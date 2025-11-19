@@ -94,7 +94,8 @@ cd <pasta>
 ```
 
 ### 3.3 Subir o Airflow
-
+ - Atualize o user_id e group_id dentro do arquivo airflow/.env para mapear as permissões corretas do linux
+ 
 ```
 cd airflow
 docker compose up -d
