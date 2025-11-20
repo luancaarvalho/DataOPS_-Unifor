@@ -1,5 +1,5 @@
 
-# README — Pipeline de Monitoramento de Câmbio com Airflow, DataOps, Datasets e BI Semanal
+# Pipeline de Monitoramento de Câmbio com Airflow, DataOps, Datasets e BI Semanal
 
 Este repositório implementa um pipeline **completo e reprodutível** usando **Apache Airflow**, **Postgres**, **DataOps**, **Datasets**, **Dynamic Task Mapping**, **Makefile**, **pytest** e **tox** para monitoramento do câmbio USD/BRL, anotação automática, validação, geração de BI semanal e relatórios agregados orientados a dados.
 
@@ -87,6 +87,7 @@ risco_semana = 1 se pct_dias_alerta > 0.5
 ```
 
 ---
+### 1. Evidências funcionamento do fluxo
 
 <p align="center">
   <img src="docs/airflow_graph_dag.png" width="600">
@@ -301,6 +302,14 @@ A tabela `fx_relatorios_semanais` também é atualizada pela DAG 2 sempre que o 
 
 ---
 
+### 1. Acessar metabase
+```
+make up
+# acessar http://localhost:3000
+# usuário e senha padrão
+```
+### 2. Evidências metabase
+
 <p align="center">
   <img src="docs/visao_negocio.png" width="600">
   <br>
@@ -322,7 +331,7 @@ Este projeto demonstra:
 - Pipeline diário idempotente
 - BI automático semanal
 - Dynamic Task Mapping
-- Makefile + tox + invoke para automação completa
+- Makefile + tox para automação completa
 - Testes automatizados
 - Logging técnico e monitoramento real
 
