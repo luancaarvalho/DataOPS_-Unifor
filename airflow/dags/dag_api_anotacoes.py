@@ -9,11 +9,6 @@ from airflow.decorators import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 
-DEFAULT_ARGS = {
-    "owner": "dieb",
-    "retries": 0,
-}
-
 LIMITE_ALERTA = 5.35  # threshold para alert_flag
 
 
@@ -21,17 +16,24 @@ LIMITE_ALERTA = 5.35  # threshold para alert_flag
 # Conexão com Postgres
 # ---------------------------------------------
 def get_engine():
-    hook = PostgresHook(postgres_conn_id="postgres_default")
+    hook = PostgresHook(postgres_conn_id="postgres")
     return hook.get_sqlalchemy_engine()
 
 
 # ---------------------------------------------
 # Log genérico de eventos do pipeline
 # ---------------------------------------------
-def log_pipeline_event(task: str, status: str, msg: str | None = None, nova_linha_fato: int | None = None):
+def log_pipeline_event(
+    task: str,
+    status: str,
+    msg: str | None = None,
+    nova_linha_fato: int | None = None,
+):
     engine = get_engine()
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             INSERT INTO bi_fx_monitoramento_pipeline (
                 data_execucao,
                 execution_date,
@@ -41,12 +43,45 @@ def log_pipeline_event(task: str, status: str, msg: str | None = None, nova_linh
                 nova_linha_fato
             )
             VALUES (NOW(), NOW(), :task, :status, :msg, :nova_linha_fato)
-        """), {
-            "task": task,
-            "status": status,
-            "msg": msg,
-            "nova_linha_fato": nova_linha_fato,
-        })
+        """
+            ),
+            {
+                "task": task,
+                "status": status,
+                "msg": msg,
+                "nova_linha_fato": nova_linha_fato,
+            },
+        )
+
+
+# ---------------------------------------------
+# Callbacks globais de sucesso/falha de task
+# ---------------------------------------------
+def task_success_callback(context):
+    ti = context["task_instance"]
+    # não passo nova_linha_fato aqui porque isso é específico de algumas tasks
+    log_pipeline_event(task=ti.task_id, status="success")
+
+
+def task_failure_callback(context):
+    ti = context["task_instance"]
+    exc = context.get("exception")
+    log_pipeline_event(
+        task=ti.task_id,
+        status="failed",
+        msg=str(exc) if exc else None,
+        nova_linha_fato=0,
+    )
+
+# ---------------------------------------------
+# DEFAULT_ARGS (com callbacks)
+# ---------------------------------------------
+DEFAULT_ARGS = {
+    "owner": "dieb",
+    "retries": 0,
+    "on_success_callback": task_success_callback,
+    "on_failure_callback": task_failure_callback,
+}
 
 
 # ---------------------------------------------
@@ -61,7 +96,7 @@ FX_BI_SEMANAL_DS = Dataset("postgres://bi_fx_cambio_negocio")
 # =====================================================================
 with DAG(
     dag_id="monitoramento_cambio_anotacoes",
-    start_date=datetime(2025, 11, 1),
+    start_date=datetime(2025, 9, 1),
     schedule_interval="@daily",
     catchup=True,
     default_args=DEFAULT_ARGS,
@@ -76,7 +111,9 @@ with DAG(
         engine = get_engine()
         with engine.begin() as conn:
 
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS fx_usdbrl_monitoramento (
                     id SERIAL PRIMARY KEY,
                     ref_date DATE NOT NULL UNIQUE,
@@ -90,9 +127,13 @@ with DAG(
                     alert_flag INT,
                     created_at TIMESTAMP DEFAULT NOW()
                 );
-            """))
+            """
+                )
+            )
 
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS fx_dq_results (
                     data_execucao TIMESTAMP,
                     total_registros INT,
@@ -101,9 +142,13 @@ with DAG(
                     nulos_bid INT,
                     nulos_ask INT
                 );
-            """))
+            """
+                )
+            )
 
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS bi_fx_monitoramento_pipeline (
                     data_execucao TIMESTAMP,
                     execution_date TIMESTAMP,
@@ -112,9 +157,13 @@ with DAG(
                     mensagem_erro TEXT,
                     nova_linha_fato INT
                 );
-            """))
+            """
+                )
+            )
 
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS fx_relatorios_semanais (
                     semana DATE PRIMARY KEY,
                     bid_medio_semana NUMERIC,
@@ -125,7 +174,9 @@ with DAG(
                     risco_semana INT,
                     created_at TIMESTAMP DEFAULT NOW()
                 );
-            """))
+            """
+                )
+            )
 
     # ---------------------------------------------
     # 2. Ingestão – usando logical_date
@@ -154,7 +205,9 @@ with DAG(
                 "bid": None,
                 "ask": None,
                 "pct_change": None,
-                "timestamp": int(datetime.combine(dia, datetime.min.time()).timestamp()),
+                "timestamp": int(
+                    datetime.combine(dia, datetime.min.time()).timestamp()
+                ),
             }
 
         usdbrl = data[0]
@@ -192,7 +245,9 @@ with DAG(
             if record["bid"] is None or record["ask"] is None:
                 engine = get_engine()
                 with engine.begin() as conn:
-                    conn.execute(text("""
+                    conn.execute(
+                        text(
+                            """
                         INSERT INTO fx_usdbrl_monitoramento
                             (ref_date, ref_timestamp, code, codein, name,
                              bid, ask, pct_change, alert_flag)
@@ -211,8 +266,12 @@ with DAG(
                             ask          = EXCLUDED.ask,
                             pct_change   = EXCLUDED.pct_change,
                             alert_flag   = EXCLUDED.alert_flag;
-                    """), record)
+                    """
+                        ),
+                        record,
+                    )
 
+                # log mais específico dessa task
                 log_pipeline_event(
                     task="validate_and_save",
                     status="skipped",
@@ -229,7 +288,9 @@ with DAG(
 
             engine = get_engine()
             with engine.begin() as conn:
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO fx_usdbrl_monitoramento
                         (ref_date, ref_timestamp, code, codein, name,
                          bid, ask, pct_change, alert_flag)
@@ -248,8 +309,12 @@ with DAG(
                         ask          = EXCLUDED.ask,
                         pct_change   = EXCLUDED.pct_change,
                         alert_flag   = EXCLUDED.alert_flag;
-                """), record)
+                """
+                    ),
+                    record,
+                )
 
+            # log específico dessa task (além do callback global)
             log_pipeline_event(
                 task="validate_and_save",
                 status="success",
@@ -259,6 +324,7 @@ with DAG(
             return 1
 
         except Exception as e:
+            # log de erro específico
             log_pipeline_event(
                 task="validate_and_save",
                 status="failed",
@@ -296,7 +362,9 @@ with DAG(
         }
 
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 INSERT INTO fx_dq_results (
                     data_execucao,
                     total_registros,
@@ -313,7 +381,10 @@ with DAG(
                     :nulos_bid,
                     :nulos_ask
                 )
-            """), metrics)
+            """
+                ),
+                metrics,
+            )
 
         return total
 
@@ -325,7 +396,9 @@ with DAG(
     def build_bi():
         engine = get_engine()
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE OR REPLACE VIEW bi_fx_cambio_negocio AS
                 SELECT
                     date_trunc('week', ref_date)::date AS semana,
@@ -341,10 +414,12 @@ with DAG(
                 FROM fx_usdbrl_monitoramento
                 GROUP BY date_trunc('week', ref_date)
                 ORDER BY semana;
-            """))
+            """
+                )
+            )
 
     # ---------------------------------------------
-    # 7. Monitoramento técnico agregado
+    # 7. Monitoramento técnico agregado por run
     # ---------------------------------------------
     @task
     def monitor_pipeline(total_inserted: int):
@@ -355,7 +430,7 @@ with DAG(
             nova_linha_fato=total_inserted,
         )
 
-    # Encadeamento
+    # Encadeamento DAG 1
     ct = create_tables()
     rec = get_exchange_rates()
     ann = annotate_rates(rec)
@@ -399,7 +474,9 @@ with DAG(
         engine = get_engine()
 
         with engine.begin() as conn:
-            row = conn.execute(text("""
+            row = conn.execute(
+                text(
+                    """
                 SELECT
                     semana,
                     bid_medio_semana,
@@ -409,15 +486,24 @@ with DAG(
                     pct_dias_alerta
                 FROM bi_fx_cambio_negocio
                 WHERE semana = CAST(:semana AS date)
-            """), {"semana": semana}).fetchone()
+            """
+                ),
+                {"semana": semana},
+            ).fetchone()
 
             if not row:
                 return
 
             # Flag de risco semanal: mais de 50% dos dias em alerta
-            risco_semana = 1 if (row.pct_dias_alerta is not None and row.pct_dias_alerta > 0.5) else 0
+            risco_semana = (
+                1
+                if (row.pct_dias_alerta is not None and row.pct_dias_alerta > 0.5)
+                else 0
+            )
 
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 INSERT INTO fx_relatorios_semanais (
                     semana,
                     bid_medio_semana,
@@ -443,15 +529,18 @@ with DAG(
                     dias_com_dado    = EXCLUDED.dias_com_dado,
                     pct_dias_alerta  = EXCLUDED.pct_dias_alerta,
                     risco_semana     = EXCLUDED.risco_semana;
-            """), {
-                "semana": row.semana,
-                "bid_medio_semana": row.bid_medio_semana,
-                "ask_medio_semana": row.ask_medio_semana,
-                "dias_alerta": row.dias_alerta,
-                "dias_com_dado": row.dias_com_dado,
-                "pct_dias_alerta": row.pct_dias_alerta,
-                "risco_semana": risco_semana,
-            })
+            """
+                ),
+                {
+                    "semana": row.semana,
+                    "bid_medio_semana": row.bid_medio_semana,
+                    "ask_medio_semana": row.ask_medio_semana,
+                    "dias_alerta": row.dias_alerta,
+                    "dias_com_dado": row.dias_com_dado,
+                    "pct_dias_alerta": row.pct_dias_alerta,
+                    "risco_semana": risco_semana,
+                },
+            )
 
     semanas = get_semanas_unicas()
     gerar_relatorio_semana.expand(semana=semanas)
