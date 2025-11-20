@@ -310,7 +310,7 @@ A tabela `fx_relatorios_semanais` também é atualizada pela DAG 2 sempre que o 
 <p align="center">
   <img src="docs/monitor_tecnico.png" width="600">
   <br>
-  <em>Monitoramento técnico no Metabase</em>
+  <em>Figura 3 - Monitoramento técnico no Metabase</em>
 </p>
 
 ## Conclusão
