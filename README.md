@@ -1,425 +1,330 @@
-# 📊 Pipeline de Monitoramento de Câmbio, Anotação e BI Semanal
-_Projeto DataOps com Airflow, Postgres, Datasets e Dynamic Task Mapping_
+
+# README — Pipeline de Monitoramento de Câmbio com Airflow, DataOps, Datasets e BI Semanal
+
+Este repositório implementa um pipeline **completo e reprodutível** usando **Apache Airflow**, **Postgres**, **DataOps**, **Datasets**, **Dynamic Task Mapping**, **Makefile**, **pytest** e **tox** para monitoramento do câmbio USD/BRL, anotação automática, validação, geração de BI semanal e relatórios agregados orientados a dados.
 
 ---
 
-## ✨ Objetivo Geral
+## Estrutura Geral do Projeto
 
-Este projeto implementa um pipeline **end-to-end** para monitorar o câmbio **USD/BRL**, com foco em:
-
-- Ingestão automática de dados via API pública  
-- **Anotação automática** dos dados (flag de alerta)  
-- **Validação e Data Quality** com logging em tabela dedicada  
-- **Geração de visão de negócio semanal** em uma *view* SQL  
-- **Relatórios semanais enriquecidos** em tabela física  
-- **Monitoramento técnico** do pipeline (status, erros, registros inseridos)  
-- Uso de **Airflow Datasets (Data-Aware Scheduling)** para orquestração orientada a dados  
-- Uso de **Dynamic Task Mapping** para gerar relatórios semanais de forma escalável
-
----
-
-## 🧩 Visão das DAGs
-
-O pipeline é composto por **duas DAGs**:
-
-### 1. `monitoramento_cambio_anotacoes` (DAG principal)
-
-Executa diariamente (`@daily`, com `catchup=True`) e é responsável por:
-
-1. **Criação de tabelas** no Postgres (se não existirem):
-   - `fx_usdbrl_monitoramento` – fato diária do câmbio  
-   - `fx_dq_results` – métricas de Data Quality  
-   - `bi_fx_monitoramento_pipeline` – log técnico das execuções  
-   - `fx_relatorios_semanais` – tabela final de relatórios semanais (consumida pela DAG 2)
-
-2. **Ingestão de dados da API**  
-   - Task: `get_exchange_rates`  
-   - Fonte: `https://economia.awesomeapi.com.br/json/daily/USD-BRL/`  
-   - Busca os dados do dia baseado em `logical_date` da execução da DAG.
-
-3. **Anotação automática**  
-   - Task: `annotate_rates`  
-   - Cria a flag:
-     ```python
-     alert_flag = 1 se bid > LIMITE_ALERTA
-     ```
-   - O limite é configurável:
-     ```python
-     LIMITE_ALERTA = 5.35
-     ```
-
-4. **Validação + UPSERT no Postgres**  
-   - Task: `validate_and_save`  
-   - Regras:
-     - Se `bid` ou `ask` forem `None` → registra linha “nula” para o dia  
-     - Se `bid <= 0` ou `ask <= 0` → gera erro e loga falha  
-     - Usa `ON CONFLICT (ref_date)` para garantir **idempotência** por dia:
-       ```sql
-       INSERT INTO fx_usdbrl_monitoramento (...)
-       VALUES (...)
-       ON CONFLICT (ref_date) DO UPDATE SET ...
-       ```
-
-   - **Emite o Dataset** `FX_MONITORAMENTO_DS`:
-     ```python
-     FX_MONITORAMENTO_DS = Dataset("postgres://fx_usdbrl_monitoramento")
-     ```
-
-5. **Data Quality**  
-   - Task: `data_quality`  
-   - Lê `fx_usdbrl_monitoramento` e calcula:
-     - `total_registros`
-     - `erros_bid_nao_positivo`
-     - `erros_ask_nao_positivo`
-     - `nulos_bid`
-     - `nulos_ask`
-   - Insere tudo em `fx_dq_results`.
-
-6. **BI – visão semanal**  
-   - Task: `build_bi`  
-   - Cria a *view* `bi_fx_cambio_negocio`, agregada por semana:
-     ```sql
-     CREATE OR REPLACE VIEW bi_fx_cambio_negocio AS
-     SELECT
-         date_trunc('week', ref_date)::date AS semana,
-         AVG(bid) AS bid_medio_semana,
-         AVG(ask) AS ask_medio_semana,
-         SUM(CASE WHEN alert_flag = 1 THEN 1 ELSE 0 END) AS dias_alerta,
-         COUNT(*) AS dias_com_dado,
-         CASE
-             WHEN COUNT(*) = 0 THEN 0
-             ELSE SUM(CASE WHEN alert_flag = 1 THEN 1 ELSE 0 END)::float / COUNT(*)
-         END AS pct_dias_alerta
-     FROM fx_usdbrl_monitoramento
-     GROUP BY date_trunc('week', ref_date)
-     ORDER BY semana;
-     ```
-
-   - **Emite o Dataset** `FX_BI_SEMANAL_DS`:
-     ```python
-     FX_BI_SEMANAL_DS = Dataset("postgres://bi_fx_cambio_negocio")
-     ```
-
-7. **Monitoramento técnico**  
-   - Task: `monitor_pipeline`  
-   - Registra em `bi_fx_monitoramento_pipeline`:
-     - data_execucao  
-     - task  
-     - status  
-     - mensagem_erro (se houver)  
-     - `nova_linha_fato` (quantidade de registros inseridos/atualizados)
-
----
-
-### 2. `fx_bi_relatorios_semanais` (DAG de relatórios)
-
-Essa DAG **não tem schedule cron**.  
-Ela é disparada **automaticamente por Dataset**, quando a DAG 1 atualiza o BI semanal.
-
-```python
-with DAG(
-    dag_id="fx_bi_relatorios_semanais",
-    start_date=datetime(2025, 11, 1),
-    schedule=[FX_BI_SEMANAL_DS],  # data-driven
-    catchup=False,
-    ...
-)
+```
+├── .tox/
+├── airflow/
+│   ├── dags/
+│   │   ├── monitoramento_cambio_anotacoes.py
+│   │   └── fx_bi_relatorios_semanais.py
+│   ├── docker-compose-airflow.yml
+│   └── requirements.txt
+├── docs/
+│   └── airflow_graph_dag.png
+├── tests/
+│   └── test_dags_load.py
+├── Makefile
+├── tox.ini
+└── README.md
 ```
 
-Ela executa:
+---
 
-1. **Leitura das semanas disponíveis**
-   - Task: `get_semanas_unicas`
-   - Lê `bi_fx_cambio_negocio` e extrai:
-     ```sql
-     SELECT DISTINCT semana FROM bi_fx_cambio_negocio;
-     ```
-   - Retorna uma lista de semanas em formato string.
+## Objetivo do Pipeline
 
-2. **Dynamic Task Mapping por semana**
-   - Task: `gerar_relatorio_semana`
-   - É mapeada dinamicamente:
-     ```python
-     semanas = get_semanas_unicas()
-     gerar_relatorio_semana.expand(semana=semanas)
-     ```
-   - Para cada semana:
-     - Lê a linha correspondente da *view* `bi_fx_cambio_negocio`
-     - Calcula `risco_semana`:
-       ```python
-       risco_semana = 1 se pct_dias_alerta > 0.5, senão 0
-       ```
-     - Insere/atualiza em `fx_relatorios_semanais`:
-       ```sql
-       INSERT INTO fx_relatorios_semanais (...)
-       VALUES (...)
-       ON CONFLICT (semana) DO UPDATE SET ...
-       ```
+O projeto implementa um fluxo completo que inclui:
+
+- Ingestão diária da API pública de câmbio
+- Anotação automática (`alert_flag`)
+- Data Quality e logging técnico
+- View de BI semanal (Dataset)
+- Relatórios semanais com Dynamic Task Mapping
+- Orquestração orientada por dados via **Airflow Datasets**
+- Execução automática de testes
+- Ferramentas de automação (Makefile, tox, tasks.py)
 
 ---
 
-## 🗄️ Estrutura das Tabelas Principais
+## DAG 1 — `monitoramento_cambio_anotacoes`
+
+- Executa **diariamente** com `@daily`
+- Usa `catchup=True` para rodar histórico
+- Etapas:
+
+1. **create_tables**
+2. **get_exchange_rates**
+3. **annotate_rates**
+4. **validate_and_save**  
+   - Faz `UPSERT` por dia  
+   - Emite `FX_MONITORAMENTO_DS`
+5. **data_quality**
+6. **build_bi**  
+   - Cria a view semanal de BI  
+   - Emite `FX_BI_SEMANAL_DS`
+7. **monitor_pipeline**
+
+---
+
+## DAG 2 — `fx_bi_relatorios_semanais`
+
+- **Não tem cron**
+- É acionada automaticamente quando o Dataset
+  ```
+  FX_BI_SEMANAL_DS = Dataset("postgres://bi_fx_cambio_negocio")
+  ```
+  é atualizado pela DAG 1.
+- Etapas:
+
+1. `get_semanas_unicas`
+2. `gerar_relatorio_semana` (Dynamic Task Mapping)
+
+Essa DAG grava na tabela física:
+
+```
+fx_relatorios_semanais
+```
+
+Incluindo a flag exclusiva:
+
+```
+risco_semana = 1 se pct_dias_alerta > 0.5
+```
+
+---
+
+<p align="center">
+  <img src="docs/airflow_graph_dag.png" width="600">
+  <br>
+  <em>Figura 1 – Fluxo da DAG principal</em>
+</p>
+
+## Estrutura das Tabelas Criadas
 
 ### `fx_usdbrl_monitoramento`
-- `id` (PK)  
-- `ref_date` (DATE, UNIQUE)  
-- `ref_timestamp` (TIMESTAMP)  
-- `code`, `codein`, `name`  
-- `bid`, `ask`, `pct_change`  
-- `alert_flag` (INT)  
-- `created_at`  
+Contém dados diários da API, anotação e timestamp.
+
+| Coluna         | Tipo      | Descrição                                                   |
+|----------------|-----------|-------------------------------------------------------------|
+| id             | SERIAL PK | Identificador único da linha                                |
+| ref_date       | DATE      | Data de referência da cotação (única por dia)               |
+| ref_timestamp  | TIMESTAMP | Timestamp retornado pela API                                |
+| code           | TEXT      | Código da moeda base (USD)                                  |
+| codein         | TEXT      | Código da moeda de destino (BRL)                            |
+| name           | TEXT      | Nome da cotação                                             |
+| bid            | NUMERIC   | Valor de compra do dólar                                    |
+| ask            | NUMERIC   | Valor de venda do dólar                                     |
+| pct_change     | NUMERIC   | Variação percentual                                         |
+| alert_flag     | INT       | 1=alerta, 0=ok, NULL=sem dados                              |
+| created_at     | TIMESTAMP | Timestamp da inserção                                       |
+
 
 ### `fx_dq_results`
-- `data_execucao`  
-- `total_registros`  
-- `erros_bid_nao_positivo`  
-- `erros_ask_nao_positivo`  
-- `nulos_bid`  
-- `nulos_ask`  
+Contém contagens de erros, nulos, validação e total de registros.
+
+| Coluna                   | Tipo      | Descrição                                      |
+|--------------------------|-----------|------------------------------------------------|
+| data_execucao            | TIMESTAMP | Timestamp da execução do DQ                    |
+| total_registros          | INT       | Total de linhas em fx_usdbrl_monitoramento     |
+| erros_bid_nao_positivo   | INT       | Contagem de bid <= 0                           |
+| erros_ask_nao_positivo   | INT       | Contagem de ask <= 0                           |
+| nulos_bid                | INT       | Contagem de valores NULL em bid                |
+| nulos_ask                | INT       | Contagem de valores NULL em ask                |
 
 ### `bi_fx_monitoramento_pipeline`
-- `data_execucao`  
-- `execution_date`  
-- `task`  
-- `status`  
-- `mensagem_erro`  
-- `nova_linha_fato`  
+Tabela de log técnico do pipeline (todas as tasks logam sucesso/falha).
 
-### `bi_fx_cambio_negocio` (VIEW)
-- `semana`  
-- `bid_medio_semana`  
-- `ask_medio_semana`  
-- `dias_alerta`  
-- `dias_com_dado`  
-- `pct_dias_alerta`  
+| Coluna         | Tipo      | Descrição                                       |
+|----------------|-----------|-------------------------------------------------|
+| data_execucao  | TIMESTAMP | Quando o log foi inserido                       |
+| execution_date | TIMESTAMP | Logical date da DAG                             |
+| task           | TEXT      | Nome da task                                    |
+| status         | TEXT      | success / failed / skipped                      |
+| mensagem_erro  | TEXT      | Texto do erro, se existir                       |
+| nova_linha_fato| INT       | 1 se inseriu dado novo, 0 se não                |
+
+### View `bi_fx_cambio_negocio`
+Agrega por semana:
+
+- `bid_medio_semana`
+- `ask_medio_semana`
+- `dias_alerta`
+- `dias_com_dado`
+- `pct_dias_alerta`
+
+| Coluna             | Tipo    | Descrição                                            |
+|--------------------|---------|------------------------------------------------------|
+| semana             | DATE    | Primeiro dia da semana                               |
+| bid_medio_semana   | NUMERIC | Média semanal de bid                                 |
+| ask_medio_semana   | NUMERIC | Média semanal de ask                                 |
+| dias_alerta        | INT     | Quantos dias da semana tiveram alerta                |
+| dias_com_dado      | INT     | Quantidade de dias com dados                         |
+| pct_dias_alerta    | NUMERIC | dias_alerta / dias_com_dado                          |
 
 ### `fx_relatorios_semanais`
-- `semana` (PK)  
-- `bid_medio_semana`  
-- `ask_medio_semana`  
-- `dias_alerta`  
-- `dias_com_dado`  
-- `pct_dias_alerta`  
-- `risco_semana` (INT: 1 se mais de 50% dos dias da semana foram alerta)  
-- `created_at`  
+Materializa o BI semanal + flag de risco.
+
+| Coluna             | Tipo      | Descrição                                             |
+|--------------------|-----------|-------------------------------------------------------|
+| semana             | DATE PK   | Semana agregada                                       |
+| bid_medio_semana   | NUMERIC   | Média semanal do bid                                  |
+| ask_medio_semana   | NUMERIC   | Média semanal do ask                                  |
+| dias_alerta        | INT       | Total de dias com alerta                              |
+| dias_com_dado      | INT       | Total de dias com informações                         |
+| pct_dias_alerta    | NUMERIC   | Proporção de dias com alerta                          |
+| risco_semana       | INT       | 1 se pct_dias_alerta > 0.5, senão 0                   |
+| created_at         | TIMESTAMP | Timestamp do relatório                                |
+
 
 ---
 
-## 🔗 Como Funcionam os Datasets e Eventos
+## Testes com pytest
 
-Este projeto utiliza **Airflow Datasets** para orquestrar as DAGs de forma **data-driven**.
+Arquivo:
 
-### Datasets definidos
-
-```python
-FX_MONITORAMENTO_DS = Dataset("postgres://fx_usdbrl_monitoramento")
-FX_BI_SEMANAL_DS   = Dataset("postgres://bi_fx_cambio_negocio")
+```
+tests/test_dags.py
 ```
 
-- `FX_MONITORAMENTO_DS` é emitido pela task `validate_and_save`.  
-- `FX_BI_SEMANAL_DS` é emitido pela task `build_bi`.
+Conteúdo:
 
-### Emissão de Dataset (outlets)
+```
+from airflow.models import DagBag
 
-Exemplo em `validate_and_save`:
+def test_dags_import():
+    dag_bag = DagBag(dag_folder="dags", include_examples=False)
+    assert len(dag_bag.import_errors) == 0
 
-```python
-@task(outlets=[FX_MONITORAMENTO_DS])
-def validate_and_save(record: dict) -> int:
-    ...
+def test_monitoramento_dag_exists():
+    dag_bag = DagBag(dag_folder="dags", include_examples=False)
+    assert "monitoramento_cambio_anotacoes" in dag_bag.dags
+    assert "fx_bi_relatorios_semanais" in dag_bag.dags
 ```
 
-Exemplo em `build_bi`:
+## Tox — Ambiente Isolado para Testes
 
-```python
-@task(outlets=[FX_BI_SEMANAL_DS])
-def build_bi():
-    ...
+Arquivo `tox.ini`:
+
+```
+[tox]
+envlist = py
+
+[testenv]
+deps =
+    pytest
+    -r airflow/requirements.txt
+commands =
+    pytest tests/
 ```
 
-### DAG data-driven (consumidora de Dataset)
+### Rodar:
 
-A DAG `fx_bi_relatorios_semanais` é configurada com:
-
-```python
-with DAG(
-    dag_id="fx_bi_relatorios_semanais",
-    schedule=[FX_BI_SEMANAL_DS],
-    ...
-)
+```
+tox
 ```
 
-Isso significa que:
-
-- Ela **não é acionada por cron**  
-- Ela **é acionada automaticamente** sempre que a DAG 1 atualiza o Dataset `FX_BI_SEMANAL_DS` na execução de `build_bi`.
-
 ---
 
-## ⚙️ Como Acionar os Eventos/Datasets na Prática
+## Makefile — Automação de Comandos
 
-### 1. Ativar as duas DAGs
+Arquivo `Makefile`:
 
-No Airflow UI:
+```
+backfill-desde:
+	@if [ -z "$(DESDE)" ]; then 		echo "Uso: make backfill-desde DESDE=2025-11-01"; exit 1; 	fi; 	END=$$(date +"%Y-%m-%d"); 	docker compose -f airflow/docker-compose.yaml exec airflow-webserver 		airflow dags backfill monitoramento_cambio_anotacoes -s $(DESDE) -e $$END
 
-- Deixe **`monitoramento_cambio_anotacoes`** como `unpaused`  
-- Deixe **`fx_bi_relatorios_semanais`** como `unpaused`  
+run-tests:
+	pytest -q
 
-> Se a DAG de relatórios estiver `paused`, ela **não** será disparada pelo Dataset, mesmo que o Dataset seja atualizado.
+up:
+	docker compose -f airflow/docker-compose.yaml up -d
 
----
-
-### 2. Rodar a DAG principal e observar o disparo automático
-
-1. No Airflow UI, clique em:
-   - `monitoramento_cambio_anotacoes` → *Run DAG*
-
-2. A execução seguirá a sequência:
-   - `create_tables`  
-   - `get_exchange_rates`  
-   - `annotate_rates`  
-   - `validate_and_save` (emite `FX_MONITORAMENTO_DS`)  
-   - `data_quality`  
-   - `build_bi` (emite `FX_BI_SEMANAL_DS`)  
-   - `monitor_pipeline`
-
-3. Quando `build_bi` terminar com sucesso, o Airflow irá:
-   - Marcar o Dataset `FX_BI_SEMANAL_DS` como atualizado
-   - Disparar automaticamente a DAG `fx_bi_relatorios_semanais`
-
-4. Na DAG 2, você verá:
-   - `get_semanas_unicas`  
-   - `gerar_relatorio_semana[semana_1]`  
-   - `gerar_relatorio_semana[semana_2]`  
-   - etc.
-
-### 3. Teste manual de evento/dataset
-
-Você também pode testar apenas a parte de BI + Dataset:
-
-- Execute manualmente **somente** a task `build_bi` da DAG 1:
-  - Graph → clique em `build_bi` → *Run*
-
-Isso:
-
-- Recria a view `bi_fx_cambio_negocio`  
-- Emite o Dataset `FX_BI_SEMANAL_DS`  
-- Dispara automaticamente a DAG `fx_bi_relatorios_semanais`
-
----
-
-## ✅ Como Validar a Ingestão Automática Ponta a Ponta
-
-Após rodar o pipeline, você pode validar pelo banco (Metabase, Adminer, psql).
-
-### 1. Validar ingestão e anotação diária
-
-```sql
-SELECT *
-FROM fx_usdbrl_monitoramento
-ORDER BY ref_date;
+down:
+	docker compose -f airflow/docker-compose.yaml down
 ```
 
-Verifique:
+### Rodar backfill:
 
-- Se há registros para os dias esperados  
-- Se `bid`, `ask` e `alert_flag` estão preenchidos  
-- Se o dia corrente está presente após a execução da DAG
-
----
-
-### 2. Validar Data Quality
-
-```sql
-SELECT *
-FROM fx_dq_results
-ORDER BY data_execucao DESC;
+```
+make backfill-desde DESDE=2025-11-01
 ```
 
-Verifique:
-
-- `total_registros` crescendo ao longo do tempo  
-- `erros_*` normalmente iguais a zero  
-- `nulos_*` podem existir se API não retornar dados em algum dia, principalmente dias não-úteis
-
 ---
 
-### 3. Validar a visão de negócio semanal (view)
+## Como Validar a Execução Ponta a Ponta
 
-```sql
-SELECT *
-FROM bi_fx_cambio_negocio
-ORDER BY semana;
+### 1. Rodar Airflow
+
+```
+make up
+```
+### 2. Rodar conexão Postgres
+
+```
+make create-conn-postgres
 ```
 
-Verifique:
+### 3. Ativar DAGs no UI
 
-- `bid_medio_semana` e `ask_medio_semana` fazendo sentido  
-- `dias_alerta` coerente com a regra de `alert_flag`  
-- `pct_dias_alerta` entre 0 e 1
+- `monitoramento_cambio_anotacoes` → **unpaused** PRINCIPAL
+- `fx_bi_relatorios_semanais` → **unpaused**
 
----
+### 4. Rodar a DAG principal
 
-### 4. Validar os relatórios semanais enriquecidos (DAG 2)
+Isso vai:
+- puxar o câmbio
+- anotar
+- validar
+- registrar DQ
+- emitir Dataset
+- gerar BI
+- disparar a DAG 2 automaticamente
 
-```sql
-SELECT *
-FROM fx_relatorios_semanais
-ORDER BY semana;
+### 5. Validar tabelas no Postgres:
+
+```
+SELECT * FROM fx_usdbrl_monitoramento;
+SELECT * FROM fx_dq_results;
+SELECT * FROM bi_fx_cambio_negocio;
+SELECT * FROM fx_relatorios_semanais;
+SELECT * FROM bi_fx_monitoramento_pipeline;
 ```
 
-Verifique:
+---
 
-- As mesmas métricas da view, agora **materializadas** em tabela  
-- Campo `risco_semana`:
-  - 1 se `pct_dias_alerta > 0.5` (mais da metade dos dias da semana em alerta)  
-  - 0 caso contrário  
+## Como o Metabase se Atualiza Automaticamente
 
-Se essas linhas existem e foram preenchidas **sem você rodar manualmente a DAG 2**, então:
+A view `bi_fx_cambio_negocio` é recriada **toda vez** que a DAG 1 roda.
 
-- O Dataset `FX_BI_SEMANAL_DS` foi emitido corretamente  
-- A DAG `fx_bi_relatorios_semanais` foi disparada automaticamente  
-- A ingestão está funcionando ponta a ponta, de forma **data-driven**
+O Metabase, ao acessar a view, sempre lerá:
+
+- dados atualizados a partir de Agosto/25
+- últimas semanas
+- percentuais de alerta já processados
+
+A tabela `fx_relatorios_semanais` também é atualizada pela DAG 2 sempre que o Dataset muda.
 
 ---
 
-## 📊 Sugestões de Dashboards (Metabase)
+<p align="center">
+  <img src="docs/visao_negocio.png" width="600">
+  <br>
+  <em>Figura 2 – Visão de negócio no Metabase</em>
+</p>
 
-### Visão de Negócio
+<p align="center">
+  <img src="docs/monitor_tecnico.png" width="600">
+  <br>
+  <em>Monitoramento técnico no Metabase</em>
+</p>
 
-Base: `bi_fx_cambio_negocio` ou `fx_relatorios_semanais`
-
-- Linha: `bid_medio_semana` vs. `semana`  
-- Linha: `ask_medio_semana` vs. `semana`  
-- Barra: `dias_alerta` por semana  
-- Indicador: `% semanas com risco_semana = 1`
-
-### Monitoramento Técnico
-
-Base: `bi_fx_monitoramento_pipeline` + `fx_dq_results`
-
-- Cards:
-  - Total execuções  
-  - Média de linhas inseridas  
-  - Execuções com erro  
-- Séries temporais:
-  - `nova_linha_fato` ao longo do tempo  
-  - contagem de erros de validação  
-- Tabela:
-  - Últimas execuções com `status`, `task`, `mensagem_erro`
-
----
-
-## 🏁 Conclusão
+## Conclusão
 
 Este projeto demonstra:
 
-- Práticas de **DataOps** aplicadas na prática  
-- Orquestração orientada a dados (**Airflow Datasets**)  
-- Separação clara entre:
-  - Pipeline de ingestão/transformação (DAG 1)  
-  - Pipeline de BI/relatório (DAG 2)  
-- Uso de **Dynamic Task Mapping** para escalar por semana  
-- Observabilidade (tabelas de DQ e monitoramento)  
-- Pipeline idempotente (UPSERT por dia)  
-- BI atualizado de forma **automática**, sem intervenção manual
+- DataOps aplicado
+- Datasets para orquestração data-driven
+- Pipeline diário idempotente
+- BI automático semanal
+- Dynamic Task Mapping
+- Makefile + tox + invoke para automação completa
+- Testes automatizados
+- Logging técnico e monitoramento real
+
+---
+
