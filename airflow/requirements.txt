@@ -1,0 +1,14 @@
+apache-airflow==2.9.2
+apache-airflow-providers-postgres==5.10.1
+
+pandas==2.2.2
+requests==2.32.3
+
+psycopg2-binary==2.9.9
+python-dateutil==2.9.0.post0
+
+# Para DAGs com Dataset
+pendulum==3.0.0
+
+# Evita warnings do boto ao instalar airflow
+cryptography==42.0.7

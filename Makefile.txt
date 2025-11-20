@@ -1,0 +1,70 @@
+# Nome do projeto / pasta onde está o docker-compose.yaml
+PROJECT_NAME ?= airflow
+COMPOSE      ?= docker compose
+
+# DAG principal usada nos exemplos de backfill
+MAIN_DAG_ID  ?= monitoramento_qualidade_ar
+
+.PHONY: help
+help:
+	@echo "Comandos disponíveis:"
+	@echo "  make up                - Sobe os containers em segundo plano"
+	@echo "  make down              - Derruba os containers"
+	@echo "  make restart           - Reinicia webserver + scheduler"
+	@echo "  make ps                - Mostra status dos containers"
+	@echo "  make logs-web          - Logs do webserver"
+	@echo "  make logs-scheduler    - Logs do scheduler"
+	@echo "  make airflow-init      - Inicializa banco do Airflow (airflow db init)"
+	@echo "  make airflow-user      - Cria usuário admin padrão (airflow/airflow)"
+	@echo "  make backfill-nov      - Backfill de novembro de 2025 da DAG principal"
+	@echo "  make bash-web          - Abre bash dentro do container do webserver"
+
+.PHONY: up
+up:
+	$(COMPOSE) up -d
+
+.PHONY: down
+down:
+	$(COMPOSE) down
+
+.PHONY: restart
+restart:
+	$(COMPOSE) restart airflow-airflow-webserver-1 airflow-airflow-scheduler-1
+
+.PHONY: ps
+ps:
+	$(COMPOSE) ps
+
+.PHONY: logs-web
+logs-web:
+	$(COMPOSE) logs airflow-airflow-webserver-1 --tail=100 -f
+
+.PHONY: logs-scheduler
+logs-scheduler:
+	$(COMPOSE) logs airflow-airflow-scheduler-1 --tail=100 -f
+
+.PHONY: airflow-init
+airflow-init:
+	$(COMPOSE) run --rm airflow-airflow-webserver-1 airflow db init
+
+.PHONY: airflow-user
+airflow-user:
+	$(COMPOSE) run --rm airflow-airflow-webserver-1 \
+		airflow users create \
+			--username airflow \
+			--firstname Admin \
+			--lastname User \
+			--role Admin \
+			--email admin@example.com \
+			--password airflow
+
+.PHONY: backfill-nov
+backfill-nov:
+	$(COMPOSE) run --rm airflow-airflow-webserver-1 \
+		airflow dags backfill $(MAIN_DAG_ID) \
+			-s 2025-11-01 \
+			-e 2025-11-30
+
+.PHONY: bash-web
+bash-web:
+	$(COMPOSE) exec airflow-airflow-webserver-1 bash
