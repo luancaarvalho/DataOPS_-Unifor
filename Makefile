@@ -5,75 +5,79 @@
 PYTHON ?= python3
 VENV ?= .venv
 
-# ----------------------------
-# Alvos "falsos" (não são arquivos)
-# ----------------------------
-.PHONY: help venv install lint format test tox airflow-init airflow-up airflow-down backfill-novembro dev
+# Carrega variáveis do .env (se existir)
+-include .env
+export
 
-# ----------------------------
-# Ajuda
-# ----------------------------
-help:
-	@echo "Comandos disponíveis:"
-	@echo "  make venv                -> cria ambiente virtual"
-	@echo "  make install             -> instala dependências no venv"
-	@echo "  make lint                -> roda flake8 + black --check nas DAGs"
-	@echo "  make format              -> formata código com black"
-	@echo "  make test                -> roda pytest na pasta tests/"
-	@echo "  make tox                 -> roda tox (pipeline de testes)"
-	@echo "  make airflow-init        -> inicializa o Airflow (migrations etc)"
-	@echo "  make airflow-up          -> sobe o Airflow com docker-compose"
-	@echo "  make airflow-down        -> derruba o Airflow"
-	@echo "  make backfill-novembro   -> roda backfill da DAG de câmbio em novembro"
-	@echo "  make dev                 -> fluxo completo: install + lint + test"
+COMPOSE = airflow/docker-compose.yaml
 
-# ----------------------------
-# Ambiente Python
-# ----------------------------
-venv:
-	$(PYTHON) -m venv $(VENV)
+# ======================================================================
+# Subir / derrubar o Airflow
+# ======================================================================
 
-install: venv
-	. $(VENV)/bin/activate && pip install -r requirements.txt
+up:
+	docker compose -f $(COMPOSE) up -d
 
-# ----------------------------
-# Qualidade de código
-# ----------------------------
-lint:
-	. $(VENV)/bin/activate && flake8 dags && black --check dags
+down:
+	docker compose -f $(COMPOSE) down
 
-format:
-	. $(VENV)/bin/activate && black dags
+logs:
+	docker compose -f $(COMPOSE) logs -f
 
-test:
-	. $(VENV)/bin/activate && pytest tests
+# ======================================================================
+# Inicializar Airflow (cria banco, inicializa metadados)
+# ======================================================================
 
-tox:
-	. $(VENV)/bin/activate && tox
+init-airflow:
+	docker compose -f $(COMPOSE) exec airflow-webserver airflow db init
+	docker compose -f $(COMPOSE) exec airflow-webserver airflow users create \
+		--username admin \
+		--firstname Admin \
+		--lastname User \
+		--role Admin \
+		--email admin@example.com \
+		--password admin || true
 
-dev: install lint test
+# ======================================================================
+# Criar conexão Postgres no Airflow
+# ======================================================================
 
-# ----------------------------
-# Airflow + Docker
-# ----------------------------
-airflow-init:
-	docker compose -f airflow/docker-compose.yaml up airflow-init
+create-conn-postgres:
+	docker compose -f $(COMPOSE) exec airflow-webserver \
+		airflow connections add 'postgres_default' \
+			--conn-type 'postgres' \
+			--conn-host '$(POSTGRES_HOST)' \
+			--conn-login '$(POSTGRES_USER)' \
+			--conn-password '$(POSTGRES_PASSWORD)' \
+			--conn-port '$(POSTGRES_PORT)' \
+			--conn-schema '$(POSTGRES_DB)' || true
 
-airflow-up:
-	docker compose -f airflow/docker-compose.yaml up -d
+# ======================================================================
+# Backfill manual
+# ======================================================================
 
-airflow-down:
-	docker compose -f airflow/docker-compose.yaml down
-
-# ----------------------------
-# Backfill para o cenário do trabalho 
-# ----------------------------
 backfill-desde:
 	@if [ -z "$(DESDE)" ]; then \
-		echo "Uso: make backfill-desde DESDE=2025-09-01"; exit 1; \
+		echo "Uso: make backfill-desde DESDE=2025-08-01"; exit 1; \
 	fi
 	END=$$(date +"%Y-%m-%d"); \
-	docker compose -f airflow/docker-compose.yaml exec airflow-webserver \
+	docker compose -f $(COMPOSE) exec airflow-webserver \
 		airflow dags backfill monitoramento_cambio_anotacoes \
 		-s $(DESDE) -e $$END
+
+# ======================================================================
+# Rodar Testes (tox e pytest)
+# ======================================================================
+
+test:
+	tox || pytest tests/ --maxfail=1 --disable-warnings
+
+# ======================================================================
+# Limpar tudo (containers + volumes)
+# ======================================================================
+
+clean:
+	docker compose -f $(COMPOSE) down -v
+	rm -rf logs/ || true
+	rm -rf airflow/airflow.db || true
 

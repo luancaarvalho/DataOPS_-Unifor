@@ -23,20 +23,20 @@ def test(c):
 @task
 def airflow_up(c):
     """Sobe o Airflow via docker-compose."""
-    c.run("docker compose -f docker-compose-airflow.yml up -d", pty=True)
+    c.run("docker compose -f airflow/docker-compose.yaml up -d", pty=True)
 
 
 @task
 def airflow_down(c):
     """Derruba o Airflow."""
-    c.run("docker compose -f docker-compose-airflow.yml down", pty=True)
+    c.run("docker compose -f airflow/docker-compose.yaml down", pty=True)
 
 
 @task
 def backfill_meses(c):
     """Roda backfill de meses da DAG de câmbio."""
     c.run(
-        "docker compose -f docker-compose-airflow.yml exec airflow-webserver "
+        "docker compose -f airflow/docker-compose.yaml exec airflow-webserver "
         "airflow dags backfill monitoramento_cambio_anotacoes "
         "-s 2025-09-01 -e 2025-11-01",
         pty=True,
